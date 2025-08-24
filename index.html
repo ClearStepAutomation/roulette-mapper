@@ -2,44 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Roulette Mapper – Standalone (Fixed + Calibration)</title>
+  <title>Roulette Mapper – Standalone (EU + US)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <style>
     :root{
-      --bg:#0b0f14;
-      --panel:#10161e;
-      --panel2:#0f141b;
-      --text:#e7eef7;
-      --muted:#9bb0c6;
-      --accent:#50e3c2;
-      --danger:#ff6b6b;
-      --warn:#ffc857;
-      --line:#1e2733;
-      --blue:#4aa3ff;
-      --green:#1bd760;
-      --pink:#ff5ab1;
-      --orange:#ffa657;
+      --bg:#0b0f14; --panel:#10161e; --panel2:#0f141b; --text:#e7eef7; --muted:#9bb0c6;
+      --accent:#50e3c2; --danger:#ff6b6b; --warn:#ffc857; --line:#1e2733; --blue:#4aa3ff; --green:#1bd760;
     }
     *{box-sizing:border-box}
     html,body{height:100%; min-height:100vh}
-    body{
-      margin:0; background:var(--bg); color:var(--text);
-      font:14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
-    }
-    header{
-      display:flex; align-items:center; gap:12px;
-      padding:12px 16px; border-bottom:1px solid var(--line);
-      background:linear-gradient(180deg, rgba(255,255,255,.03), transparent);
-      position:sticky; top:0; z-index:3;
-    }
+    body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
+    header{display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,.03), transparent); position:sticky; top:0; z-index:3}
     header h1{font-size:16px; margin:0; font-weight:600}
     header .tag{padding:4px 8px; border-radius:999px; background:#0e293f; color:#9bd0ff; font-weight:600}
-    main{display:grid; grid-template-columns:320px 1fr; height:calc(100vh - 54px)}
+    main{display:grid; grid-template-columns:340px 1fr; height:calc(100vh - 54px)}
     aside{background:var(--panel); border-right:1px solid var(--line); padding:12px; overflow:auto}
     #workspace{position:relative; overflow:hidden; background:var(--panel2)}
     .group{border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:12px; background:rgba(255,255,255,0.02)}
     .group h2{margin:0 0 8px 0; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
-    .row{display:flex; gap:8px; flex-wrap:wrap}
+    .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
     button,.btn{background:#15202b; color:var(--text); border:1px solid var(--line); padding:8px 10px; border-radius:8px; cursor:pointer; font-weight:600}
     button:hover{background:#1a2633}
     button.primary{background:var(--blue); border-color:transparent; color:#031422}
@@ -53,22 +35,13 @@
     .progress > div{height:100%; background:var(--green); width:0%}
     #canvas{position:absolute; inset:0; width:100%; height:100%; background:#0a0f14; cursor:crosshair}
     .hint{font-size:12px; color:var(--muted)}
-    .kbd{font-family:ui-monospace, Menlo, Consolas, monospace; background:#0e1823; border:1px solid #1b2940; padding:1px 6px; border-radius:6px}
     .callout{padding:10px 12px; border:1px solid #193144; background:#0d1f2e; border-radius:10px}
     .sep{height:1px; background:var(--line); margin:8px 0}
     .small{font-size:12px; color:var(--muted)}
-    .badge{background:#13271e; color:#6ee7a9; padding:2px 6px; border-radius:6px; font-weight:700; font-size:12px}
-    .danger{color:var(--danger)}
-    .flex{display:flex; gap:8px; align-items:center}
-    .grow{flex:1}
-    .rt-toggle{display:flex; gap:8px; align-items:center}
-    .checkbox{width:18px; height:18px; border:1px solid var(--line); border-radius:4px; display:inline-flex; align-items:center; justify-content:center}
-    .checkbox input{display:none}
-    .checkbox svg{width:14px; height:14px; opacity:.0}
-    .checkbox input:checked + svg{opacity:1}
     .legend{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; font-size:12px; color:var(--muted)}
     .legend span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
     .nowrap{white-space:nowrap}
+    select, input[type="checkbox"]{cursor:pointer}
   </style>
 </head>
 <body>
@@ -107,6 +80,14 @@
 
       <div class="group">
         <h2>Mapping</h2>
+        <div class="row">
+          <label class="nowrap" for="variantSelect">Variant</label>
+          <select id="variantSelect">
+            <option value="EU" selected>European (single‑zero)</option>
+            <option value="US">American (double‑zero)</option>
+          </select>
+          <span class="hint">Affects singles & zero‑area steps</span>
+        </div>
         <div class="status">
           <span id="stepLabel" class="pill">—</span>
           <span id="stepHelp" class="small">Click to start…</span>
@@ -117,18 +98,12 @@
           <button id="skipBtn" class="warn">Skip</button>
         </div>
         <div class="row">
-          <label class="rt-toggle">
-            <span class="checkbox"><input id="racetrackToggle" type="checkbox" /><svg viewBox="0 0 24 24" fill="none" stroke="#6ee7a9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
-            Include Racetrack steps
-          </label>
-        </div>
-        <div class="row">
           <label class="nowrap" for="depthSelect">Depth</label>
           <select id="depthSelect">
-            <option value="basic" selected>Basic (80)</option>
-            <option value="full">Full (159)</option>
+            <option value="basic" selected>Basic (≈80–84)</option>
+            <option value="full">Full (159+)</option>
           </select>
-          <span class="hint">Choose how many positions to map</span>
+          <label class="nowrap" style="margin-left:8px"><input id="racetrackToggle" type="checkbox"/> Include Racetrack steps</label>
         </div>
         <div class="sep"></div>
         <div class="progress"><div id="progressBar"></div></div>
@@ -156,18 +131,17 @@
       <div class="group">
         <h2>Legend</h2>
         <div class="legend">
-          <span>• Singles 0–36</span>
+          <span>• Singles 0–36 (US adds 00)</span>
           <span>• Colors R/B/G</span>
           <span>• Dozens (1st/2nd/3rd)</span>
           <span>• Columns (1/2/3)</span>
           <span>• 1–18 / Even / Odd / 19–36</span>
           <span>• Streets (12) & Sixlines (11)</span>
-          <span>• First Four (0–3)</span>
-          <span>• 0–1 / 0–2 / 0–3</span>
-          <span>• Splits & Corners (full)</span>
+          <span>• Zero area: First Four (EU) / First Five (US)</span>
+          <span>• Zero splits incl. 0–1/2/3 (+ 0–00, 00–2/3 in US)</span>
           <span>• Buttons: Spin / Result / Double</span>
           <span>• Calibration: Numbers grid bbox</span>
-          <span>• Racetrack (bbox + 4 bets)</span>
+          <span>• Racetrack (bbox + Voisins/Tiers/Orphelins/Jeu Zéro)</span>
         </div>
       </div>
 
@@ -207,6 +181,7 @@
   const progressBar = document.getElementById('progressBar');
   const progressText = document.getElementById('progressText');
   const depthSelect = document.getElementById('depthSelect');
+  const variantSelect = document.getElementById('variantSelect');
 
   // ---------- State ----------
   let img = null;          // HTMLImageElement fallback
@@ -232,22 +207,30 @@
   }
 
   // ---------- Steps ----------
-  function buildSteps(includeRacetrack, depth) {
+  function buildSteps(includeRacetrack, depth, variant) {
     const s = [];
-    // Singles 0–36
-    for (let n = 0; n <= 36; n++) s.push({ key:`single_${n}`, label:`Number ${n}`, type:'point', help:'Click center of the number box' });
+    const isUS = variant === 'US';
+
+    // Singles
+    s.push({ key:`single_0`, label:`Number 0`, type:'point', help:'Click center of 0' });
+    if (isUS) s.push({ key:`single_00`, label:`Number 00`, type:'point', help:'Click center of 00' });
+    for (let n = 1; n <= 36; n++) s.push({ key:`single_${n}`, label:`Number ${n}`, type:'point', help:'Click center of the number box' });
+
     // Colors
-    s.push({ key:'color_red',   label:'Color Red', type:'point', help:'Click the Red box' });
+    s.push({ key:'color_red',   label:'Color Red',   type:'point', help:'Click the Red box' });
     s.push({ key:'color_black', label:'Color Black', type:'point', help:'Click the Black box' });
-    s.push({ key:'color_green', label:'Color Green', type:'point', help:'If no Green box, use 0 box' });
+    s.push({ key:'color_green', label:'Color Green', type:'point', help:'If no Green box, use 0 or 00' });
+
     // Dozens
     s.push({ key:'dozen_1', label:'1st 12', type:'point', help:'Click 1st12' });
     s.push({ key:'dozen_2', label:'2nd 12', type:'point', help:'Click 2nd12' });
     s.push({ key:'dozen_3', label:'3rd 12', type:'point', help:'Click 3rd12' });
+
     // Columns
     s.push({ key:'column_1', label:'Column 1', type:'point', help:'Click Column 1' });
     s.push({ key:'column_2', label:'Column 2', type:'point', help:'Click Column 2' });
     s.push({ key:'column_3', label:'Column 3', type:'point', help:'Click Column 3' });
+
     // Even chances
     s.push({ key:'even_low',  label:'1–18',  type:'point', help:'Click 1–18' });
     s.push({ key:'even_even', label:'Even',  type:'point', help:'Click Even' });
@@ -259,11 +242,21 @@
     // Sixlines (11)
     for (let i=0;i<11;i++){ const start = 1 + i*3; const end = start + 5; s.push({ key:`sixline_${i+1}`, label:`Sixline ${i+1} (${start}–${end})`, type:'point', help:'Click the sixline wager spot' }); }
 
-    // First Four & Zero splits
-    s.push({ key:'first_four', label:'First Four (0–1–2–3)', type:'point', help:'Click First Four box' });
-    s.push({ key:'split_0_1', label:'Split 0–1', type:'point', help:'Click Split 0–1' });
-    s.push({ key:'split_0_2', label:'Split 0–2', type:'point', help:'Click Split 0–2' });
-    s.push({ key:'split_0_3', label:'Split 0–3', type:'point', help:'Click Split 0–3' });
+    // Zero area (variant-specific)
+    if (isUS) {
+      s.push({ key:'first_five', label:'First Five (0–00–1–2–3)', type:'point', help:'Click First Five box' });
+      s.push({ key:'split_0_00', label:'Split 0–00', type:'point', help:'Click between 0 and 00' });
+      s.push({ key:'split_00_2', label:'Split 00–2', type:'point', help:'Click split 00–2' });
+      s.push({ key:'split_00_3', label:'Split 00–3', type:'point', help:'Click split 00–3' });
+      s.push({ key:'split_0_1', label:'Split 0–1', type:'point', help:'Click Split 0–1' });
+      s.push({ key:'split_0_2', label:'Split 0–2', type:'point', help:'Click Split 0–2' });
+      s.push({ key:'split_0_3', label:'Split 0–3', type:'point', help:'Click Split 0–3' });
+    } else {
+      s.push({ key:'first_four', label:'First Four (0–1–2–3)', type:'point', help:'Click First Four box' });
+      s.push({ key:'split_0_1', label:'Split 0–1', type:'point', help:'Click Split 0–1' });
+      s.push({ key:'split_0_2', label:'Split 0–2', type:'point', help:'Click Split 0–2' });
+      s.push({ key:'split_0_3', label:'Split 0–3', type:'point', help:'Click Split 0–3' });
+    }
 
     // Calibration (numbers grid bbox)
     s.push({ key:'calib_grid_bbox', label:'Calibration: Numbers grid bbox', type:'region', help:'Drag around the 1–36 grid area' });
@@ -281,9 +274,9 @@
       s.push({ key:'rt_orphelins', label:'Racetrack: Orphelins', type:'point', help:'Click Orphelins' });
       s.push({ key:'rt_jeu_zero',  label:'Racetrack: Jeu Zéro',  type:'point', help:'Click Jeu Zéro' });
     }
-        // Extra sets for FULL depth
+
+    // Extra sets for FULL depth (inside-grid splits & corners)
     if (depth === 'full') {
-      // Grid splits (1–36 only)
       // Horizontal splits per row
       for (let r=0; r<12; r++) {
         const a = 3*r + 1; const b = a + 1; const c = b + 1;
@@ -297,11 +290,11 @@
           s.push({ key:`split_${n}_${m}`, label:`Split ${n}–${m}`, type:'point', help:'Click the split between boxes' });
         }
       }
-      // Corners (2x2 squares in 1–36 grid)
+      // Corners (2x2)
       for (let r=0; r<11; r++) {
         for (let c=1; c<=2; c++) {
           const tl = 3*r + c; const tr = tl + 1; const bl = tl + 3; const br = bl + 1;
-          s.push({ key:`corner_${tl}_${tr}_${bl}_${br}`, label:`Corner ${tl}-${tr}-${bl}-${br}`, type:'point', help:'Click the corner (intersection) point' });
+          s.push({ key:`corner_${tl}_${tr}_${bl}_${br}`, label:`Corner ${tl}-${tr}-${bl}-${br}`, type:'point', help:'Click the intersection point' });
         }
       }
     }
@@ -309,20 +302,22 @@
   }
 
   function resetSteps() {
-    steps = buildSteps(racetrackToggle.checked, (depthSelect && depthSelect.value) || 'basic');
+    steps = buildSteps(
+      racetrackToggle.checked,
+      (depthSelect && depthSelect.value) || 'basic',
+      (variantSelect && variantSelect.value) || 'EU'
+    );
     const firstIncomplete = steps.findIndex(st => !data[st.key] || data[st.key].skipped);
     stepIndex = Math.max(0, firstIncomplete === -1 ? 0 : firstIncomplete);
     updateUI(); draw();
   }
 
-  // ---------- Image loading (robust) ----------
+  // ---------- Image loading ----------
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      // Fast path
       try { imgBitmap = window.createImageBitmap ? await createImageBitmap(file) : null; } catch(_) { imgBitmap = null; }
-      // Universal path: DataURL → <img>
       const fr = new FileReader();
       fr.onload = () => {
         const im = new Image();
@@ -332,9 +327,7 @@
       };
       fr.onerror = () => alert('Failed to read image file.');
       fr.readAsDataURL(file);
-    } catch (err) {
-      alert('Failed to load image: ' + (err && err.message ? err.message : err));
-    }
+    } catch (err) { alert('Failed to load image: ' + (err && err.message ? err.message : err)); }
   });
 
   function fitView() {
@@ -380,9 +373,7 @@
 
   function drawOverlay(g, final=false) {
     const circleR = 8; const sc = final ? 1 : view.scale; // keep label sizes consistent
-    g.lineWidth = 2 / sc;
-    g.font = `${12 / sc}px ui-monospace, Menlo, Consolas, monospace`;
-    g.textBaseline = 'top';
+    g.lineWidth = 2 / sc; g.font = `${12 / sc}px ui-monospace, Menlo, Consolas, monospace`; g.textBaseline = 'top';
     for (const st of steps) {
       const val = data[st.key]; if (!val || val.skipped) continue;
       if (val.type === 'point') {
@@ -403,9 +394,7 @@
     ctx.moveTo(x - s, y); ctx.lineTo(x + s, y); ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke(); ctx.restore();
   }
 
-  function labelShort(label) {
-    return label.replace('Racetrack: ','RT: ').replace('Spin button','Spin').replace('Result panel','Result').replace('Double button','Double');
-  }
+  function labelShort(label){return label.replace('Racetrack: ','RT: ').replace('Spin button','Spin').replace('Result panel','Result').replace('Double button','Double');}
 
   // ---------- UI updates ----------
   function updateUI() {
@@ -474,6 +463,7 @@
   skipBtn.addEventListener('click', () => skipCurrent());
   racetrackToggle.addEventListener('change', () => resetSteps());
   depthSelect.addEventListener('change', () => resetSteps());
+  variantSelect.addEventListener('change', () => { data = {}; history = []; resetSteps(); });
   clearAllBtn.addEventListener('click', (e) => {
     const alsoImage = e.shiftKey; // hold Shift to clear screenshot too
     data = {}; history = []; pendingRegionFirst = null; stepIndex = 0;
@@ -483,32 +473,14 @@
 
   // ---------- Export / Import ----------
   exportJsonBtn.addEventListener('click', () => {
-    const payload = {
-      meta: {
-        tool: 'roulette-mapper-standalone',
-        version: 2,
-        timestamp: new Date().toISOString(),
-        image: img ? { width: img.width, height: img.height } : null,
-        racetrack: racetrackToggle.checked,
-        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region' ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null
-      },
-      points: data
-    };
+    const isUS = (variantSelect && variantSelect.value) === 'US';
+    const payload = buildExportPayload(isUS);
     downloadJSON(payload, 'roulette-mapping.json');
   });
 
   openJsonBtn.addEventListener('click', () => {
-    const payload = {
-      meta: {
-        tool: 'roulette-mapper-standalone',
-        version: 2,
-        timestamp: new Date().toISOString(),
-        image: img ? { width: img.width, height: img.height } : null,
-        racetrack: racetrackToggle.checked,
-        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region' ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null
-      },
-      points: data
-    };
+    const isUS = (variantSelect && variantSelect.value) === 'US';
+    const payload = buildExportPayload(isUS);
     const w = window.open();
     w.document.write('<pre style="white-space:pre-wrap;word-break:break-word;font:12px ui-monospace,Menlo,Consolas,monospace;padding:12px;background:#0b0f14;color:#e7eef7;">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</pre>');
     w.document.close();
@@ -531,6 +503,7 @@
       if (payload && payload.points && typeof payload.points === 'object') {
         data = payload.points;
         if (payload.meta && typeof payload.meta.racetrack === 'boolean') racetrackToggle.checked = payload.meta.racetrack;
+        if (payload.layout) variantSelect.value = payload.layout === 'US' ? 'US' : 'EU';
         if (payload.meta && payload.meta.calibration && payload.meta.calibration.grid_bbox) {
           const r = payload.meta.calibration.grid_bbox; data['calib_grid_bbox'] = { type:'region', x1:r.x1, y1:r.y1, x2:r.x2, y2:r.y2 };
         }
@@ -539,9 +512,105 @@
     } catch (err) { alert('Failed to parse JSON: ' + err.message); }
   });
 
+  function buildExportPayload(isUS){
+    const layout = isUS ? 'US' : 'EU';
+    const table_variant = isUS ? 'American' : 'European';
+    const regions = buildRegionsFromData(data, isUS);
+    return {
+      layout_detected: true,
+      layout, table_variant,
+      meta: {
+        tool: 'roulette-mapper-standalone', version: 3,
+        timestamp: new Date().toISOString(),
+        image: img ? { width: img.width, height: img.height } : null,
+        racetrack: racetrackToggle.checked,
+        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region' ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null
+      },
+      regions,
+      // also include the raw points for debugging/backward-compat
+      points: data
+    };
+  }
+
+  function buildRegionsFromData(points, isUS){
+    // Minimal schema-friendly exporter (buttons, numbers_grid, specials, racetrack, meta)
+    const regions = {
+      buttons: { Red:[], Black:[], Green:[], Even:[], Odd:[], Low:[], High:[], '1st12':[], '2nd12':[], '3rd12':[], col1:[], col2:[], col3:[], Double:[] },
+      numbers_grid: {},
+      splits_h: {},
+      splits_v: {},
+      corners: {},
+      streets: {},
+      sixlines: {},
+      special: {
+        first_four_0_1_2_3: [],
+        first_five_0_00_1_2_3: [],
+        zero_splits: { '0-1':[], '0-2':[], '0-3':[], '0-00':[], '00-2':[], '00-3':[] }
+      },
+      racetrack: { bbox:[], voisins:[], tiers:[], orphelins:[], jeu_zero:[] },
+      meta: { image_size: img ? [img.width, img.height] : [0,0], confidence: 0.0, notes:'', mapper_version:'3.x', generated_at: new Date().toISOString() }
+    };
+
+    // Numbers
+    regions.numbers_grid['0'] = pickPoint(points['single_0']);
+    if (isUS) regions.numbers_grid['00'] = pickPoint(points['single_00']);
+    for (let n=1; n<=36; n++) regions.numbers_grid[String(n)] = pickPoint(points[`single_${n}`]);
+
+    // Colors
+    regions.buttons.Red   = pickPoint(points['color_red']);
+    regions.buttons.Black = pickPoint(points['color_black']);
+    regions.buttons.Green = pickPoint(points['color_green']);
+
+    // Even chances
+    regions.buttons.Low   = pickPoint(points['even_low']);
+    regions.buttons.Even  = pickPoint(points['even_even']);
+    regions.buttons.Odd   = pickPoint(points['even_odd']);
+    regions.buttons.High  = pickPoint(points['even_high']);
+
+    // Dozens
+    regions.buttons['1st12'] = pickPoint(points['dozen_1']);
+    regions.buttons['2nd12'] = pickPoint(points['dozen_2']);
+    regions.buttons['3rd12'] = pickPoint(points['dozen_3']);
+
+    // Columns
+    regions.buttons.col1 = pickPoint(points['column_1']);
+    regions.buttons.col2 = pickPoint(points['column_2']);
+    regions.buttons.col3 = pickPoint(points['column_3']);
+
+    // Zero area
+    regions.special.first_four_0_1_2_3 = pickPoint(points['first_four']);
+    regions.special.first_five_0_00_1_2_3 = pickPoint(points['first_five']);
+    regions.special.zero_splits['0-1']  = pickPoint(points['split_0_1']);
+    regions.special.zero_splits['0-2']  = pickPoint(points['split_0_2']);
+    regions.special.zero_splits['0-3']  = pickPoint(points['split_0_3']);
+    regions.special.zero_splits['0-00'] = pickPoint(points['split_0_00']);
+    regions.special.zero_splits['00-2'] = pickPoint(points['split_00_2']);
+    regions.special.zero_splits['00-3'] = pickPoint(points['split_00_3']);
+
+    // Streets and sixlines (points)
+    for (let i=0;i<12;i++) regions.streets[`street_${i+1}`] = pickPoint(points[`street_${i+1}`]);
+    for (let i=0;i<11;i++) regions.sixlines[`sixline_${i+1}`] = pickPoint(points[`sixline_${i+1}`]);
+
+    // Buttons (regions)
+    regions.buttons.Double = pickRegion(points['btn_double']);
+    regions.meta.spin_box   = pickRegion(points['btn_spin']);
+    regions.meta.result_box = pickRegion(points['btn_result']);
+
+    // Racetrack
+    regions.racetrack.bbox       = pickRegion(points['rt_bbox']);
+    regions.racetrack.voisins    = pickPoint(points['rt_voisins']);
+    regions.racetrack.tiers      = pickPoint(points['rt_tiers']);
+    regions.racetrack.orphelins  = pickPoint(points['rt_orphelins']);
+    regions.racetrack.jeu_zero   = pickPoint(points['rt_jeu_zero']);
+
+    return regions;
+  }
+
+  function pickPoint(v){ return v && v.type==='point' ? [Math.round(v.x), Math.round(v.y)] : []; }
+  function pickRegion(v){ return v && v.type==='region' ? { x1:Math.round(v.x1), y1:Math.round(v.y1), x2:Math.round(v.x2), y2:Math.round(v.y2) } : []; }
+
   function downloadJSON(obj, filename) { const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }
-  function escapeHtml(str) { return str.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-  function pickRegion(v){ return { x1:Math.round(v.x1), y1:Math.round(v.y1), x2:Math.round(v.x2), y2:Math.round(v.y2) }; }
+  function escapeHtml(str) { return str.replace(/[&<>\'\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
   // ---------- Init ----------
   resizeCanvasToDisplaySize(); resetSteps(); fitView(); draw();
