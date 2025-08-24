@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Roulette Mapper – Standalone (Fixed + Calibration)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#10161e;
+      --panel2:#0f141b;
+      --text:#e7eef7;
+      --muted:#9bb0c6;
+      --accent:#50e3c2;
+      --danger:#ff6b6b;
+      --warn:#ffc857;
+      --line:#1e2733;
+      --blue:#4aa3ff;
+      --green:#1bd760;
+      --pink:#ff5ab1;
+      --orange:#ffa657;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; min-height:100vh}
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font:14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+    }
+    header{
+      display:flex; align-items:center; gap:12px;
+      padding:12px 16px; border-bottom:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,.03), transparent);
+      position:sticky; top:0; z-index:3;
+    }
+    header h1{font-size:16px; margin:0; font-weight:600}
+    header .tag{padding:4px 8px; border-radius:999px; background:#0e293f; color:#9bd0ff; font-weight:600}
+    main{display:grid; grid-template-columns:320px 1fr; height:calc(100vh - 54px)}
+    aside{background:var(--panel); border-right:1px solid var(--line); padding:12px; overflow:auto}
+    #workspace{position:relative; overflow:hidden; background:var(--panel2)}
+    .group{border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:12px; background:rgba(255,255,255,0.02)}
+    .group h2{margin:0 0 8px 0; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+    .row{display:flex; gap:8px; flex-wrap:wrap}
+    button,.btn{background:#15202b; color:var(--text); border:1px solid var(--line); padding:8px 10px; border-radius:8px; cursor:pointer; font-weight:600}
+    button:hover{background:#1a2633}
+    button.primary{background:var(--blue); border-color:transparent; color:#031422}
+    button.warn{background:var(--warn); color:#1c1405; border-color:transparent}
+    button.ghost{background:transparent}
+    input[type=file]{display:none}
+    label.file{display:inline-flex; align-items:center; gap:8px; cursor:pointer; border:1px dashed var(--line); padding:10px 12px; border-radius:8px}
+    .pill{padding:2px 6px; border-radius:6px; background:#0b2030; color:#9bd0ff; font-weight:700; font-size:12px}
+    .status{display:flex; gap:8px; align-items:center; color:var(--muted)}
+    .progress{height:8px; background:#0f1620; border-radius:6px; overflow:hidden; border:1px solid var(--line)}
+    .progress > div{height:100%; background:var(--green); width:0%}
+    #canvas{position:absolute; inset:0; width:100%; height:100%; background:#0a0f14; cursor:crosshair}
+    .hint{font-size:12px; color:var(--muted)}
+    .kbd{font-family:ui-monospace, Menlo, Consolas, monospace; background:#0e1823; border:1px solid #1b2940; padding:1px 6px; border-radius:6px}
+    .callout{padding:10px 12px; border:1px solid #193144; background:#0d1f2e; border-radius:10px}
+    .sep{height:1px; background:var(--line); margin:8px 0}
+    .small{font-size:12px; color:var(--muted)}
+    .badge{background:#13271e; color:#6ee7a9; padding:2px 6px; border-radius:6px; font-weight:700; font-size:12px}
+    .danger{color:var(--danger)}
+    .flex{display:flex; gap:8px; align-items:center}
+    .grow{flex:1}
+    .rt-toggle{display:flex; gap:8px; align-items:center}
+    .checkbox{width:18px; height:18px; border:1px solid var(--line); border-radius:4px; display:inline-flex; align-items:center; justify-content:center}
+    .checkbox input{display:none}
+    .checkbox svg{width:14px; height:14px; opacity:.0}
+    .checkbox input:checked + svg{opacity:1}
+    .legend{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; font-size:12px; color:var(--muted)}
+    .legend span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .nowrap{white-space:nowrap}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Roulette Mapper</h1>
+    <span class="tag">Standalone</span>
+    <span class="small">Client‑side • No sandbox • Works in Chrome/Safari</span>
+  </header>
+  <main>
+    <aside>
+      <div class="group">
+        <h2>Read first</h2>
+        <div class="callout small">
+          • Use <b>practice mode</b> or a static table screenshot.<br>
+          • Capture <b>full screen</b>, entire layout (inside grid, outside bets, buttons, racetrack).<br>
+          • <b>Don’t crop</b>. Keep the same browser zoom & window size for mapping/automation.<br>
+          • Hide chat/history overlays.
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Screenshot</h2>
+        <div class="row">
+          <label class="file">
+            <input id="fileInput" type="file" accept="image/*" />
+            <span>📤 Upload Screenshot</span>
+          </label>
+          <button id="resetViewBtn" class="ghost">Reset View</button>
+        </div>
+        <div class="row">
+          <button id="zoomOutBtn">Zoom −</button>
+          <button id="zoomInBtn">Zoom +</button>
+          <span class="hint">View‑only zoom & pan (drag)</span>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Mapping</h2>
+        <div class="status">
+          <span id="stepLabel" class="pill">—</span>
+          <span id="stepHelp" class="small">Click to start…</span>
+        </div>
+        <div class="sep"></div>
+        <div class="row">
+          <button id="undoBtn">Undo</button>
+          <button id="skipBtn" class="warn">Skip</button>
+        </div>
+        <div class="row">
+          <label class="rt-toggle">
+            <span class="checkbox"><input id="racetrackToggle" type="checkbox" /><svg viewBox="0 0 24 24" fill="none" stroke="#6ee7a9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+            Include Racetrack steps
+          </label>
+        </div>
+        <div class="row">
+          <label class="nowrap" for="depthSelect">Depth</label>
+          <select id="depthSelect">
+            <option value="basic" selected>Basic (80)</option>
+            <option value="full">Full (159)</option>
+          </select>
+          <span class="hint">Choose how many positions to map</span>
+        </div>
+        <div class="sep"></div>
+        <div class="progress"><div id="progressBar"></div></div>
+        <div class="small"><span id="progressText">0 / 0</span> mapped</div>
+      </div>
+
+      <div class="group">
+        <h2>Export / Import</h2>
+        <div class="row">
+          <button id="exportJsonBtn" class="primary">Export JSON</button>
+          <button id="openJsonBtn">Open JSON</button>
+        </div>
+        <div class="row">
+          <button id="openOverlayBtn">Open Overlay PNG</button>
+        </div>
+        <div class="row">
+          <label class="file">
+            <input id="importJsonInput" type="file" accept="application/json" />
+            <span>📥 Import JSON</span>
+          </label>
+          <button id="clearAllBtn">Clear</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Legend</h2>
+        <div class="legend">
+          <span>• Singles 0–36</span>
+          <span>• Colors R/B/G</span>
+          <span>• Dozens (1st/2nd/3rd)</span>
+          <span>• Columns (1/2/3)</span>
+          <span>• 1–18 / Even / Odd / 19–36</span>
+          <span>• Streets (12) & Sixlines (11)</span>
+          <span>• First Four (0–3)</span>
+          <span>• 0–1 / 0–2 / 0–3</span>
+          <span>• Splits & Corners (full)</span>
+          <span>• Buttons: Spin / Result / Double</span>
+          <span>• Calibration: Numbers grid bbox</span>
+          <span>• Racetrack (bbox + 4 bets)</span>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Quality check</h2>
+        <div class="small">
+          Open overlay PNG and confirm:<br>
+          • Points are centered • Regions hug buttons • Coverage is complete
+        </div>
+      </div>
+    </aside>
+
+    <section id="workspace">
+      <canvas id="canvas" tabindex="0" aria-label="mapping canvas"></canvas>
+    </section>
+  </main>
+
+<script>
+(() => {
+  // ---------- DOM ----------
+  const fileInput = document.getElementById('fileInput');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const zoomInBtn = document.getElementById('zoomInBtn');
+  const zoomOutBtn = document.getElementById('zoomOutBtn');
+  const resetViewBtn = document.getElementById('resetViewBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const skipBtn = document.getElementById('skipBtn');
+  const racetrackToggle = document.getElementById('racetrackToggle');
+  const exportJsonBtn = document.getElementById('exportJsonBtn');
+  const openJsonBtn = document.getElementById('openJsonBtn');
+  const openOverlayBtn = document.getElementById('openOverlayBtn');
+  const importJsonInput = document.getElementById('importJsonInput');
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  const stepLabel = document.getElementById('stepLabel');
+  const stepHelp = document.getElementById('stepHelp');
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+  const depthSelect = document.getElementById('depthSelect');
+
+  // ---------- State ----------
+  let img = null;          // HTMLImageElement fallback
+  let imgBitmap = null;    // ImageBitmap (fast path)
+  let view = { scale: 1, tx: 0, ty: 0 };
+  let isPanning = false, panStart = {x:0, y:0}, viewStart = {tx:0, ty:0};
+
+  let steps = [];
+  let stepIndex = 0;
+  let data = {};
+  let history = [];
+  let pendingRegionFirst = null;
+
+  const colors = { point:'#50e3c2', region:'#4aa3ff', current:'#ffa657', text:'#e7eef7', ghost:'rgba(255,255,255,0.15)' };
+
+  // ---------- Canvas sizing ----------
+  function resizeCanvasToDisplaySize() {
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width * dpr));
+    const height = Math.max(1, Math.floor(rect.height * dpr));
+    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+  }
+
+  // ---------- Steps ----------
+  function buildSteps(includeRacetrack, depth) {
+    const s = [];
+    // Singles 0–36
+    for (let n = 0; n <= 36; n++) s.push({ key:`single_${n}`, label:`Number ${n}`, type:'point', help:'Click center of the number box' });
+    // Colors
+    s.push({ key:'color_red',   label:'Color Red', type:'point', help:'Click the Red box' });
+    s.push({ key:'color_black', label:'Color Black', type:'point', help:'Click the Black box' });
+    s.push({ key:'color_green', label:'Color Green', type:'point', help:'If no Green box, use 0 box' });
+    // Dozens
+    s.push({ key:'dozen_1', label:'1st 12', type:'point', help:'Click 1st12' });
+    s.push({ key:'dozen_2', label:'2nd 12', type:'point', help:'Click 2nd12' });
+    s.push({ key:'dozen_3', label:'3rd 12', type:'point', help:'Click 3rd12' });
+    // Columns
+    s.push({ key:'column_1', label:'Column 1', type:'point', help:'Click Column 1' });
+    s.push({ key:'column_2', label:'Column 2', type:'point', help:'Click Column 2' });
+    s.push({ key:'column_3', label:'Column 3', type:'point', help:'Click Column 3' });
+    // Even chances
+    s.push({ key:'even_low',  label:'1–18',  type:'point', help:'Click 1–18' });
+    s.push({ key:'even_even', label:'Even',  type:'point', help:'Click Even' });
+    s.push({ key:'even_odd',  label:'Odd',   type:'point', help:'Click Odd' });
+    s.push({ key:'even_high', label:'19–36', type:'point', help:'Click 19–36' });
+
+    // Streets (12 rows)
+    for (let i=0;i<12;i++){ const start = 1 + i*3; const end = start + 2; s.push({ key:`street_${i+1}`, label:`Street ${i+1} (${start}–${end})`, type:'point', help:'Click the street wager spot' }); }
+    // Sixlines (11)
+    for (let i=0;i<11;i++){ const start = 1 + i*3; const end = start + 5; s.push({ key:`sixline_${i+1}`, label:`Sixline ${i+1} (${start}–${end})`, type:'point', help:'Click the sixline wager spot' }); }
+
+    // First Four & Zero splits
+    s.push({ key:'first_four', label:'First Four (0–1–2–3)', type:'point', help:'Click First Four box' });
+    s.push({ key:'split_0_1', label:'Split 0–1', type:'point', help:'Click Split 0–1' });
+    s.push({ key:'split_0_2', label:'Split 0–2', type:'point', help:'Click Split 0–2' });
+    s.push({ key:'split_0_3', label:'Split 0–3', type:'point', help:'Click Split 0–3' });
+
+    // Calibration (numbers grid bbox)
+    s.push({ key:'calib_grid_bbox', label:'Calibration: Numbers grid bbox', type:'region', help:'Drag around the 1–36 grid area' });
+
+    // Buttons (regions)
+    s.push({ key:'btn_spin',   label:'Spin button',   type:'region', help:'Drag a box: top‑left then bottom‑right' });
+    s.push({ key:'btn_result', label:'Result panel',  type:'region', help:'Drag a box: top‑left then bottom‑right' });
+    s.push({ key:'btn_double', label:'Double button', type:'region', help:'Drag a box: top‑left then bottom‑right' });
+
+    // Racetrack optional
+    if (includeRacetrack) {
+      s.push({ key:'rt_bbox', label:'Racetrack bbox', type:'region', help:'Drag a box covering the racetrack area' });
+      s.push({ key:'rt_voisins',   label:'Racetrack: Voisins',   type:'point', help:'Click Voisins' });
+      s.push({ key:'rt_tiers',     label:'Racetrack: Tiers',     type:'point', help:'Click Tiers' });
+      s.push({ key:'rt_orphelins', label:'Racetrack: Orphelins', type:'point', help:'Click Orphelins' });
+      s.push({ key:'rt_jeu_zero',  label:'Racetrack: Jeu Zéro',  type:'point', help:'Click Jeu Zéro' });
+    }
+        // Extra sets for FULL depth
+    if (depth === 'full') {
+      // Grid splits (1–36 only)
+      // Horizontal splits per row
+      for (let r=0; r<12; r++) {
+        const a = 3*r + 1; const b = a + 1; const c = b + 1;
+        s.push({ key:`split_${a}_${b}`, label:`Split ${a}–${b}`, type:'point', help:'Click the split between boxes' });
+        s.push({ key:`split_${b}_${c}`, label:`Split ${b}–${c}`, type:'point', help:'Click the split between boxes' });
+      }
+      // Vertical splits between rows
+      for (let r=0; r<11; r++) {
+        for (let c=1; c<=3; c++) {
+          const n = 3*r + c; const m = n + 3;
+          s.push({ key:`split_${n}_${m}`, label:`Split ${n}–${m}`, type:'point', help:'Click the split between boxes' });
+        }
+      }
+      // Corners (2x2 squares in 1–36 grid)
+      for (let r=0; r<11; r++) {
+        for (let c=1; c<=2; c++) {
+          const tl = 3*r + c; const tr = tl + 1; const bl = tl + 3; const br = bl + 1;
+          s.push({ key:`corner_${tl}_${tr}_${bl}_${br}`, label:`Corner ${tl}-${tr}-${bl}-${br}`, type:'point', help:'Click the corner (intersection) point' });
+        }
+      }
+    }
+    return s;
+  }
+
+  function resetSteps() {
+    steps = buildSteps(racetrackToggle.checked, (depthSelect && depthSelect.value) || 'basic');
+    const firstIncomplete = steps.findIndex(st => !data[st.key] || data[st.key].skipped);
+    stepIndex = Math.max(0, firstIncomplete === -1 ? 0 : firstIncomplete);
+    updateUI(); draw();
+  }
+
+  // ---------- Image loading (robust) ----------
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      // Fast path
+      try { imgBitmap = window.createImageBitmap ? await createImageBitmap(file) : null; } catch(_) { imgBitmap = null; }
+      // Universal path: DataURL → <img>
+      const fr = new FileReader();
+      fr.onload = () => {
+        const im = new Image();
+        im.onload = () => { img = im; fitView(); draw(); };
+        im.onerror = () => alert('Failed to decode image. Try a different file.');
+        im.src = String(fr.result);
+      };
+      fr.onerror = () => alert('Failed to read image file.');
+      fr.readAsDataURL(file);
+    } catch (err) {
+      alert('Failed to load image: ' + (err && err.message ? err.message : err));
+    }
+  });
+
+  function fitView() {
+    resizeCanvasToDisplaySize(); if (!img) return;
+    const cw = canvas.width, ch = canvas.height;
+    const sx = cw / img.width, sy = ch / img.height;
+    const scale = Math.min(sx, sy) * 0.95;
+    const imgW = img.width * scale, imgH = img.height * scale;
+    view.scale = scale; view.tx = (cw - imgW) / 2; view.ty = (ch - imgH) / 2;
+  }
+
+  window.addEventListener('resize', () => { resizeCanvasToDisplaySize(); fitView(); draw(); });
+
+  // ---------- Coordinate math ----------
+  function canvasToImage(x, y) { return { x: (x - view.tx) / view.scale, y: (y - view.ty) / view.scale }; }
+  function imageToCanvas(x, y) { return { x: x * view.scale + view.tx, y: y * view.scale + view.ty }; }
+  function clampToImage(pt) { if (!img) return pt; return { x: Math.max(0, Math.min(img.width, pt.x)), y: Math.max(0, Math.min(img.height, pt.y)) }; }
+
+  // ---------- Draw ----------
+  function draw() {
+    resizeCanvasToDisplaySize();
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+    ctx.fillStyle = '#0a0f14'; ctx.fillRect(0,0,canvas.width, canvas.height);
+
+    const baseImage = imgBitmap || img;
+    if (baseImage) {
+      ctx.setTransform(view.scale, 0, 0, view.scale, view.tx, view.ty);
+      ctx.drawImage(baseImage, 0, 0);
+      drawOverlay(ctx, false);
+      const st = steps[stepIndex];
+      if (st && st.type === 'region' && pendingRegionFirst) {
+        ctx.save(); ctx.globalAlpha = 0.6; ctx.strokeStyle = colors.current; ctx.setLineDash([8,6]);
+        drawCrosshair(pendingRegionFirst.x, pendingRegionFirst.y, colors.current); ctx.restore();
+      }
+    } else {
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
+      ctx.fillStyle = '#9bb0c6';
+      ctx.fillText('Upload a screenshot to begin mapping.', 16, 24);
+    }
+  }
+
+  function drawOverlay(g, final=false) {
+    const circleR = 8; const sc = final ? 1 : view.scale; // keep label sizes consistent
+    g.lineWidth = 2 / sc;
+    g.font = `${12 / sc}px ui-monospace, Menlo, Consolas, monospace`;
+    g.textBaseline = 'top';
+    for (const st of steps) {
+      const val = data[st.key]; if (!val || val.skipped) continue;
+      if (val.type === 'point') {
+        const {x, y} = val; g.fillStyle = colors.point; g.strokeStyle = 'black';
+        g.beginPath(); g.arc(x, y, circleR / sc, 0, Math.PI*2); g.fill(); g.stroke();
+        g.fillStyle = colors.text; g.fillText(labelShort(st.label), x + 10 / sc, y + 10 / sc);
+      } else if (val.type === 'region') {
+        const {x1, y1, x2, y2} = val; const w = x2 - x1, h = y2 - y1;
+        g.strokeStyle = colors.region; g.setLineDash([]); g.strokeRect(x1, y1, w, h);
+        g.fillStyle = 'rgba(74,163,255,0.12)'; g.fillRect(x1, y1, w, h);
+        g.fillStyle = colors.text; g.fillText(labelShort(st.label), x1 + 6 / sc, y1 + 6 / sc);
+      }
+    }
+  }
+
+  function drawCrosshair(x,y,col) {
+    const s = 10 / view.scale; ctx.save(); ctx.strokeStyle = col; ctx.beginPath();
+    ctx.moveTo(x - s, y); ctx.lineTo(x + s, y); ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke(); ctx.restore();
+  }
+
+  function labelShort(label) {
+    return label.replace('Racetrack: ','RT: ').replace('Spin button','Spin').replace('Result panel','Result').replace('Double button','Double');
+  }
+
+  // ---------- UI updates ----------
+  function updateUI() {
+    const total = steps.length;
+    const done = steps.filter(st => data[st.key] && !data[st.key].skipped).length;
+    const st = steps[stepIndex];
+    stepLabel.textContent = st ? st.label : 'Finished';
+    stepHelp.textContent = st ? (st.type === 'point' ? 'Point: single click at center' : 'Region: two clicks (top‑left, bottom‑right)') + ` • ${st.help || ''}` : 'All steps complete.';
+    progressBar.style.width = total ? `${Math.round(done/total*100)}%` : '0%';
+    progressText.textContent = `${done} / ${total}`;
+  }
+
+  function goToNextStep() {
+    for (let i = stepIndex + 1; i < steps.length; i++) { const k = steps[i].key; if (!data[k] || data[k].skipped) { stepIndex = i; updateUI(); return; } }
+    for (let i = 0; i < steps.length; i++) { const k = steps[i].key; if (!data[k] || data[k].skipped) { stepIndex = i; updateUI(); return; } }
+    stepIndex = steps.length; updateUI();
+  }
+
+  function setData(key, value) { const prev = data[key]; data[key] = value; history.push({ key, prevValue: prev, nextValue: value }); updateUI(); draw(); }
+  function skipCurrent() { const st = steps[stepIndex]; if (!st) return; setData(st.key, { skipped: true, type: st.type }); pendingRegionFirst = null; goToNextStep(); }
+
+  // ---------- Interactions ----------
+  canvas.addEventListener('mousedown', (e) => {
+    if (!img) return;
+    if (e.button === 1 || e.button === 2 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) { isPanning = true; panStart = { x: e.clientX, y: e.clientY }; viewStart = { tx: view.tx, ty: view.ty }; return; }
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (window.devicePixelRatio || 1);
+    const cy = (e.clientY - rect.top) * (window.devicePixelRatio || 1);
+    const { x, y } = clampToImage(canvasToImage(cx, cy));
+    const st = steps[stepIndex]; if (!st) return;
+
+    if (st.type === 'point') { setData(st.key, { type:'point', x, y }); goToNextStep(); }
+    else if (st.type === 'region') {
+      if (!pendingRegionFirst) pendingRegionFirst = { x, y };
+      else {
+        const x1 = Math.min(pendingRegionFirst.x, x), y1 = Math.min(pendingRegionFirst.y, y);
+        const x2 = Math.max(pendingRegionFirst.x, x), y2 = Math.max(pendingRegionFirst.y, y);
+        if (Math.abs(x2-x1) < 2 || Math.abs(y2-y1) < 2) { pendingRegionFirst = null; draw(); return; }
+        setData(st.key, { type:'region', x1, y1, x2, y2 }); pendingRegionFirst = null; goToNextStep();
+      }
+    }
+    draw();
+  });
+
+  canvas.addEventListener('mousemove', (e) => { if (!img) return; if (isPanning) { const dpr = window.devicePixelRatio || 1; const dx = (e.clientX - panStart.x) * dpr; const dy = (e.clientY - panStart.y) * dpr; view.tx = viewStart.tx + dx; view.ty = viewStart.ty + dy; draw(); } });
+  window.addEventListener('mouseup', () => { isPanning = false; });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  zoomInBtn.addEventListener('click', () => zoomAt(1.15));
+  zoomOutBtn.addEventListener('click', () => zoomAt(1/1.15));
+  resetViewBtn.addEventListener('click', () => { fitView(); draw(); });
+
+  function zoomAt(scaleFactor) {
+    if (!img) return;
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const before = canvasToImage(cx, cy);
+    view.scale = Math.max(0.1, Math.min(10, view.scale * scaleFactor));
+    const after = canvasToImage(cx, cy);
+    view.tx += (after.x - before.x) * view.scale; view.ty += (after.y - before.y) * view.scale; draw();
+  }
+
+  undoBtn.addEventListener('click', () => {
+    const last = history.pop(); if (!last) return; if (last.prevValue === undefined) delete data[last.key]; else data[last.key] = last.prevValue;
+    const idx = steps.findIndex(s => s.key === last.key); if (idx >= 0) stepIndex = idx; pendingRegionFirst = null; updateUI(); draw();
+  });
+  skipBtn.addEventListener('click', () => skipCurrent());
+  racetrackToggle.addEventListener('change', () => resetSteps());
+  depthSelect.addEventListener('change', () => resetSteps());
+  clearAllBtn.addEventListener('click', (e) => {
+    const alsoImage = e.shiftKey; // hold Shift to clear screenshot too
+    data = {}; history = []; pendingRegionFirst = null; stepIndex = 0;
+    if (alsoImage) { img = null; imgBitmap = null; }
+    resetSteps(); draw();
+  });
+
+  // ---------- Export / Import ----------
+  exportJsonBtn.addEventListener('click', () => {
+    const payload = {
+      meta: {
+        tool: 'roulette-mapper-standalone',
+        version: 2,
+        timestamp: new Date().toISOString(),
+        image: img ? { width: img.width, height: img.height } : null,
+        racetrack: racetrackToggle.checked,
+        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region' ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null
+      },
+      points: data
+    };
+    downloadJSON(payload, 'roulette-mapping.json');
+  });
+
+  openJsonBtn.addEventListener('click', () => {
+    const payload = {
+      meta: {
+        tool: 'roulette-mapper-standalone',
+        version: 2,
+        timestamp: new Date().toISOString(),
+        image: img ? { width: img.width, height: img.height } : null,
+        racetrack: racetrackToggle.checked,
+        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region' ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null
+      },
+      points: data
+    };
+    const w = window.open();
+    w.document.write('<pre style="white-space:pre-wrap;word-break:break-word;font:12px ui-monospace,Menlo,Consolas,monospace;padding:12px;background:#0b0f14;color:#e7eef7;">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</pre>');
+    w.document.close();
+  });
+
+  openOverlayBtn.addEventListener('click', () => {
+    if (!img) return alert('Upload a screenshot first.');
+    const off = document.createElement('canvas'); off.width = img.width; off.height = img.height;
+    const octx = off.getContext('2d');
+    const base = imgBitmap || img; octx.drawImage(base, 0, 0);
+    drawOverlay(octx, true);
+    const dataURL = off.toDataURL('image/png'); const w = window.open();
+    w.document.write(`<img src="${dataURL}" style="max-width:100%;">`); w.document.close();
+  });
+
+  importJsonInput.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0]; if (!file) return; const text = await file.text();
+    try {
+      const payload = JSON.parse(text);
+      if (payload && payload.points && typeof payload.points === 'object') {
+        data = payload.points;
+        if (payload.meta && typeof payload.meta.racetrack === 'boolean') racetrackToggle.checked = payload.meta.racetrack;
+        if (payload.meta && payload.meta.calibration && payload.meta.calibration.grid_bbox) {
+          const r = payload.meta.calibration.grid_bbox; data['calib_grid_bbox'] = { type:'region', x1:r.x1, y1:r.y1, x2:r.x2, y2:r.y2 };
+        }
+        history = []; resetSteps(); draw(); alert('Mapping JSON imported.');
+      } else { alert('Invalid JSON format.'); }
+    } catch (err) { alert('Failed to parse JSON: ' + err.message); }
+  });
+
+  function downloadJSON(obj, filename) { const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }
+  function escapeHtml(str) { return str.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  function pickRegion(v){ return { x1:Math.round(v.x1), y1:Math.round(v.y1), x2:Math.round(v.x2), y2:Math.round(v.y2) }; }
+
+  // ---------- Init ----------
+  resizeCanvasToDisplaySize(); resetSteps(); fitView(); draw();
+})();
+</script>
+</body>
+</html>
