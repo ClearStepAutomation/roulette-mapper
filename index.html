@@ -78,6 +78,45 @@
         </div>
       </div>
 
+      <!-- NEW: Rebase / Scaling panel -->
+      <div class="group" id="rebasePanel">
+        <h2>Rebase / Scaling (export)</h2>
+        <div class="row">
+          <label class="nowrap" for="rebaseToggle">Enable</label>
+          <input id="rebaseToggle" type="checkbox" />
+          <span class="hint">Export in a different coordinate system</span>
+        </div>
+        <div class="row">
+          <label class="nowrap" for="baseWidth">Base W</label>
+          <input id="baseWidth" type="number" min="1" step="1" style="width:110px" placeholder="e.g. 2560" />
+          <label class="nowrap" for="baseHeight">Base H</label>
+          <input id="baseHeight" type="number" min="1" step="1" style="width:110px" placeholder="e.g. 1440" />
+        </div>
+        <div class="row">
+          <label class="nowrap" for="offsetX">Offset X</label>
+          <input id="offsetX" type="number" step="1" style="width:110px" value="0" />
+          <label class="nowrap" for="offsetY">Offset Y</label>
+          <input id="offsetY" type="number" step="1" style="width:110px" value="0" />
+        </div>
+        <div class="row">
+          <label class="nowrap" for="scaleX">Scale X</label>
+          <input id="scaleX" type="number" step="0.0001" style="width:110px" value="1" />
+          <label class="nowrap" for="scaleY">Scale Y</label>
+          <input id="scaleY" type="number" step="0.0001" style="width:110px" value="1" />
+        </div>
+        <div class="row">
+          <button id="autoScaleBtn" class="ghost">Auto-scale from base size</button>
+          <span class="hint">Sets scale to Base ÷ Image (uses the uploaded image’s natural size)</span>
+        </div>
+        <div class="small">
+          <div class="sep"></div>
+          <b>Typical use:</b> Mapped a <i>cropped right-side</i> shot but script runs in <b>full-screen</b>?<br>
+          • Set Base W/H to your monitor (e.g., 2560×1440).<br>
+          • Set Offset X/Y to the crop’s top‑left inside the full screen.<br>
+          • If resized, click <b>Auto-scale</b> after entering Base W/H.
+        </div>
+      </div>
+
       <div class="group">
         <h2>Mapping</h2>
         <div class="row">
@@ -183,6 +222,16 @@
   const depthSelect = document.getElementById('depthSelect');
   const variantSelect = document.getElementById('variantSelect');
 
+  // NEW: Rebase / Scaling DOM
+  const rebaseToggle = document.getElementById('rebaseToggle');
+  const baseWidthInput = document.getElementById('baseWidth');
+  const baseHeightInput = document.getElementById('baseHeight');
+  const offsetXInput = document.getElementById('offsetX');
+  const offsetYInput = document.getElementById('offsetY');
+  const scaleXInput = document.getElementById('scaleX');
+  const scaleYInput = document.getElementById('scaleY');
+  const autoScaleBtn = document.getElementById('autoScaleBtn');
+
   // ---------- State ----------
   let img = null;          // HTMLImageElement fallback
   let imgBitmap = null;    // ImageBitmap (fast path)
@@ -196,6 +245,52 @@
   let pendingRegionFirst = null;
 
   const colors = { point:'#50e3c2', region:'#4aa3ff', current:'#ffa657', text:'#e7eef7', ghost:'rgba(255,255,255,0.15)' };
+
+  // NEW: Rebase / Scaling state
+  let rebase = {
+    enabled: false,
+    baseW: 0,
+    baseH: 0,
+    offX: 0,
+    offY: 0,
+    scaleX: 1,
+    scaleY: 1,
+  };
+
+  function syncRebaseFromUI() {
+    rebase.enabled = !!rebaseToggle?.checked;
+    rebase.baseW  = parseInt(baseWidthInput?.value || '0', 10) || 0;
+    rebase.baseH  = parseInt(baseHeightInput?.value || '0', 10) || 0;
+    rebase.offX   = parseFloat(offsetXInput?.value || '0') || 0;
+    rebase.offY   = parseFloat(offsetYInput?.value || '0') || 0;
+    rebase.scaleX = parseFloat(scaleXInput?.value || '1') || 1;
+    rebase.scaleY = parseFloat(scaleYInput?.value || '1') || 1;
+  }
+
+  function applyRebase(pt) {
+    if (!rebase.enabled) return { x: Math.round(pt.x), y: Math.round(pt.y) };
+    return {
+      x: Math.round(pt.x * rebase.scaleX + rebase.offX),
+      y: Math.round(pt.y * rebase.scaleY + rebase.offY),
+    };
+  }
+
+  // Wire inputs
+  [rebaseToggle, baseWidthInput, baseHeightInput, offsetXInput, offsetYInput, scaleXInput, scaleYInput]
+    .forEach(el => el && el.addEventListener('input', syncRebaseFromUI));
+
+  if (autoScaleBtn) {
+    autoScaleBtn.addEventListener('click', () => {
+      if (!img) { alert('Upload an image first.'); return; }
+      const bw = parseInt(baseWidthInput.value || '0', 10) || 0;
+      const bh = parseInt(baseHeightInput.value || '0', 10) || 0;
+      if (!bw || !bh) { alert('Enter Base W/H first.'); return; }
+      // Uses the image’s natural size (img.width/height), not the on‑screen zoom
+      scaleXInput.value = (bw / img.width).toFixed(6);
+      scaleYInput.value = (bh / img.height).toFixed(6);
+      syncRebaseFromUI();
+    });
+  }
 
   // ---------- Canvas sizing ----------
   function resizeCanvasToDisplaySize() {
@@ -475,6 +570,11 @@
   exportJsonBtn.addEventListener('click', () => {
     const isUS = (variantSelect && variantSelect.value) === 'US';
     const payload = buildExportPayload(isUS);
+    // Safety: block impossible settings
+    if (rebase.enabled && (!rebase.baseW || !rebase.baseH)) {
+      alert('Rebase enabled but Base W/H not set. Disable Rebase or enter Base W/H.');
+      return;
+    }
     downloadJSON(payload, 'roulette-mapping.json');
   });
 
@@ -516,11 +616,11 @@
     const layout = isUS ? 'US' : 'EU';
     const table_variant = isUS ? 'American' : 'European';
     const regions = buildRegionsFromData(data, isUS);
-    return {
+    const payload = {
       layout_detected: true,
       layout, table_variant,
       meta: {
-        tool: 'roulette-mapper-standalone', version: 3,
+        tool: 'roulette-mapper-standalone', version: 4,
         timestamp: new Date().toISOString(),
         image: img ? { width: img.width, height: img.height } : null,
         racetrack: racetrackToggle.checked,
@@ -530,6 +630,18 @@
       // also include the raw points for debugging/backward-compat
       points: data
     };
+
+    // NEW: append rebase metadata
+    payload.meta.rebase = {
+      enabled: rebase.enabled,
+      base_width: rebase.baseW,
+      base_height: rebase.baseH,
+      offset: [rebase.offX, rebase.offY],
+      scale: [rebase.scaleX, rebase.scaleY],
+    };
+    payload.meta.image_size_mapped = img ? [img.width, img.height] : [0,0];
+
+    return payload;
   }
 
   function buildRegionsFromData(points, isUS){
@@ -548,7 +660,7 @@
         zero_splits: { '0-1':[], '0-2':[], '0-3':[], '0-00':[], '00-2':[], '00-3':[] }
       },
       racetrack: { bbox:[], voisins:[], tiers:[], orphelins:[], jeu_zero:[] },
-      meta: { image_size: img ? [img.width, img.height] : [0,0], confidence: 0.0, notes:'', mapper_version:'3.x', generated_at: new Date().toISOString() }
+      meta: { image_size: img ? [img.width, img.height] : [0,0], confidence: 0.0, notes:'', mapper_version:'4.x', generated_at: new Date().toISOString() }
     };
 
     // Numbers
@@ -606,14 +718,26 @@
     return regions;
   }
 
-  function pickPoint(v){ return v && v.type==='point' ? [Math.round(v.x), Math.round(v.y)] : []; }
-  function pickRegion(v){ return v && v.type==='region' ? { x1:Math.round(v.x1), y1:Math.round(v.y1), x2:Math.round(v.x2), y2:Math.round(v.y2) } : []; }
+  // REPLACED: pickPoint / pickRegion now apply rebase on export
+  function pickPoint(v){
+    if (!(v && v.type==='point')) return [];
+    const t = applyRebase({ x: v.x, y: v.y });
+    return [t.x, t.y];
+  }
+  function pickRegion(v){
+    if (!(v && v.type==='region')) return [];
+    const p1 = applyRebase({ x: v.x1, y: v.y1 });
+    const p2 = applyRebase({ x: v.x2, y: v.y2 });
+    return { x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y };
+  }
 
   function downloadJSON(obj, filename) { const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }
   function escapeHtml(str) { return str.replace(/[&<>\'\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
   // ---------- Init ----------
   resizeCanvasToDisplaySize(); resetSteps(); fitView(); draw();
+  // Init rebase state from UI
+  syncRebaseFromUI();
 })();
 </script>
 </body>
