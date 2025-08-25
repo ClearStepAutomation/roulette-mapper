@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Roulette Mapper – Standalone (EU + US)</title>
+  <title>Roulette Mapper – Standalone (EU + US) + Orientation</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <style>
     :root{
@@ -78,13 +78,13 @@
         </div>
       </div>
 
-      <!-- NEW: Rebase / Scaling panel -->
+      <!-- Rebase / Scaling panel (export space) -->
       <div class="group" id="rebasePanel">
         <h2>Rebase / Scaling (export)</h2>
         <div class="row">
           <label class="nowrap" for="rebaseToggle">Enable</label>
           <input id="rebaseToggle" type="checkbox" />
-          <span class="hint">Export in a different coordinate system</span>
+          <span class="hint">Export in a different coordinate system (per orientation)</span>
         </div>
         <div class="row">
           <label class="nowrap" for="baseWidth">Base W</label>
@@ -106,14 +106,7 @@
         </div>
         <div class="row">
           <button id="autoScaleBtn" class="ghost">Auto-scale from base size</button>
-          <span class="hint">Sets scale to Base ÷ Image (uses the uploaded image’s natural size)</span>
-        </div>
-        <div class="small">
-          <div class="sep"></div>
-          <b>Typical use:</b> Mapped a <i>cropped right-side</i> shot but script runs in <b>full-screen</b>?<br>
-          • Set Base W/H to your monitor (e.g., 2560×1440).<br>
-          • Set Offset X/Y to the crop’s top‑left inside the full screen.<br>
-          • If resized, click <b>Auto-scale</b> after entering Base W/H.
+          <span class="hint">Uses the uploaded image’s natural size (per orientation)</span>
         </div>
       </div>
 
@@ -126,6 +119,14 @@
             <option value="US">American (double‑zero)</option>
           </select>
           <span class="hint">Affects singles & zero‑area steps</span>
+        </div>
+        <div class="row">
+          <label class="nowrap" for="orientationSelect">Orientation</label>
+          <select id="orientationSelect">
+            <option value="landscape" selected>Landscape (wide)</option>
+            <option value="portrait">Portrait (tall)</option>
+          </select>
+          <span class="hint">Keep a separate map per orientation</span>
         </div>
         <div class="status">
           <span id="stepLabel" class="pill">—</span>
@@ -152,7 +153,7 @@
       <div class="group">
         <h2>Export / Import</h2>
         <div class="row">
-          <button id="exportJsonBtn" class="primary">Export JSON</button>
+          <button id="exportJsonBtn" class="primary">Export JSON (this orientation)</button>
           <button id="openJsonBtn">Open JSON</button>
         </div>
         <div class="row">
@@ -221,8 +222,9 @@
   const progressText = document.getElementById('progressText');
   const depthSelect = document.getElementById('depthSelect');
   const variantSelect = document.getElementById('variantSelect');
+  const orientationSelect = document.getElementById('orientationSelect');
 
-  // NEW: Rebase / Scaling DOM
+  // Rebase / Scaling DOM
   const rebaseToggle = document.getElementById('rebaseToggle');
   const baseWidthInput = document.getElementById('baseWidth');
   const baseHeightInput = document.getElementById('baseHeight');
@@ -232,74 +234,77 @@
   const scaleYInput = document.getElementById('scaleY');
   const autoScaleBtn = document.getElementById('autoScaleBtn');
 
-  // ---------- State ----------
-  let img = null;          // HTMLImageElement fallback
-  let imgBitmap = null;    // ImageBitmap (fast path)
+  // ---------- State (per orientation) ----------
+  const ORIENTATIONS = ['landscape','portrait'];
+  let currentOrientation = 'landscape';
+
+  // Store mapping, history, and image per orientation
+  const datasets = {
+    landscape: { data: {}, history: [], img: null, imgBitmap: null },
+    portrait:  { data: {}, history: [], img: null, imgBitmap: null }
+  };
+
+  // Rebase settings per orientation
+  const rebaseByOrient = {
+    landscape: { enabled:false, baseW:0, baseH:0, offX:0, offY:0, scaleX:1, scaleY:1 },
+    portrait:  { enabled:false, baseW:0, baseH:0, offX:0, offY:0, scaleX:1, scaleY:1 }
+  };
+  let rebase = rebaseByOrient[currentOrientation];
+
+  // View state (shared)
   let view = { scale: 1, tx: 0, ty: 0 };
   let isPanning = false, panStart = {x:0, y:0}, viewStart = {tx:0, ty:0};
 
+  // Steps & mapping state (active orientation alias)
+  let img = null;          // alias to datasets[currentOrientation].img
+  let imgBitmap = null;    // alias to datasets[currentOrientation].imgBitmap
   let steps = [];
   let stepIndex = 0;
-  let data = {};
-  let history = [];
+  let data = {};           // alias to datasets[currentOrientation].data
+  let history = [];        // alias to datasets[currentOrientation].history
   let pendingRegionFirst = null;
 
   const colors = { point:'#50e3c2', region:'#4aa3ff', current:'#ffa657', text:'#e7eef7', ghost:'rgba(255,255,255,0.15)' };
 
-  // NEW: Rebase / Scaling state
-  let rebase = {
-    enabled: false,
-    baseW: 0,
-    baseH: 0,
-    offX: 0,
-    offY: 0,
-    scaleX: 1,
-    scaleY: 1,
-  };
-
+  // ---------- Rebase helpers ----------
   function syncRebaseFromUI() {
-    rebase.enabled = !!rebaseToggle?.checked;
-    rebase.baseW  = parseInt(baseWidthInput?.value || '0', 10) || 0;
-    rebase.baseH  = parseInt(baseHeightInput?.value || '0', 10) || 0;
-    rebase.offX   = parseFloat(offsetXInput?.value || '0') || 0;
-    rebase.offY   = parseFloat(offsetYInput?.value || '0') || 0;
-    rebase.scaleX = parseFloat(scaleXInput?.value || '1') || 1;
-    rebase.scaleY = parseFloat(scaleYInput?.value || '1') || 1;
+    const R = rebaseByOrient[currentOrientation];
+    R.enabled = !!rebaseToggle?.checked;
+    R.baseW  = parseInt(baseWidthInput?.value || '0', 10) || 0;
+    R.baseH  = parseInt(baseHeightInput?.value || '0', 10) || 0;
+    R.offX   = parseFloat(offsetXInput?.value || '0') || 0;
+    R.offY   = parseFloat(offsetYInput?.value || '0') || 0;
+    R.scaleX = parseFloat(scaleXInput?.value || '1') || 1;
+    R.scaleY = parseFloat(scaleYInput?.value || '1') || 1;
+    rebase = R;
   }
-
+  function loadRebaseToUI() {
+    const R = rebaseByOrient[currentOrientation];
+    rebaseToggle.checked = !!R.enabled;
+    baseWidthInput.value = R.baseW || '';
+    baseHeightInput.value = R.baseH || '';
+    offsetXInput.value = R.offX;
+    offsetYInput.value = R.offY;
+    scaleXInput.value = R.scaleX;
+    scaleYInput.value = R.scaleY;
+    rebase = R;
+  }
   function applyRebase(pt) {
-    if (!rebase.enabled) return { x: Math.round(pt.x), y: Math.round(pt.y) };
-    return {
-      x: Math.round(pt.x * rebase.scaleX + rebase.offX),
-      y: Math.round(pt.y * rebase.scaleY + rebase.offY),
-    };
+    const R = rebaseByOrient[currentOrientation];
+    if (!R.enabled) return { x: Math.round(pt.x), y: Math.round(pt.y) };
+    return { x: Math.round(pt.x * R.scaleX + R.offX), y: Math.round(pt.y * R.scaleY + R.offY) };
   }
-
-  // Wire inputs
   [rebaseToggle, baseWidthInput, baseHeightInput, offsetXInput, offsetYInput, scaleXInput, scaleYInput]
     .forEach(el => el && el.addEventListener('input', syncRebaseFromUI));
-
-  if (autoScaleBtn) {
-    autoScaleBtn.addEventListener('click', () => {
-      if (!img) { alert('Upload an image first.'); return; }
-      const bw = parseInt(baseWidthInput.value || '0', 10) || 0;
-      const bh = parseInt(baseHeightInput.value || '0', 10) || 0;
-      if (!bw || !bh) { alert('Enter Base W/H first.'); return; }
-      // Uses the image’s natural size (img.width/height), not the on‑screen zoom
-      scaleXInput.value = (bw / img.width).toFixed(6);
-      scaleYInput.value = (bh / img.height).toFixed(6);
-      syncRebaseFromUI();
-    });
-  }
-
-  // ---------- Canvas sizing ----------
-  function resizeCanvasToDisplaySize() {
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const rect = canvas.getBoundingClientRect();
-    const width = Math.max(1, Math.floor(rect.width * dpr));
-    const height = Math.max(1, Math.floor(rect.height * dpr));
-    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
-  }
+  autoScaleBtn.addEventListener('click', () => {
+    if (!img) { alert('Upload a screenshot for this orientation first.'); return; }
+    const bw = parseInt(baseWidthInput.value || '0', 10) || 0;
+    const bh = parseInt(baseHeightInput.value || '0', 10) || 0;
+    if (!bw || !bh) { alert('Enter Base W/H first.'); return; }
+    scaleXInput.value = (bw / img.width).toFixed(6);
+    scaleYInput.value = (bh / img.height).toFixed(6);
+    syncRebaseFromUI();
+  });
 
   // ---------- Steps ----------
   function buildSteps(includeRacetrack, depth, variant) {
@@ -407,16 +412,43 @@
     updateUI(); draw();
   }
 
-  // ---------- Image loading ----------
+  // ---------- Orientation switching ----------
+  function bindOrientationAliases() {
+    const ds = datasets[currentOrientation];
+    data = ds.data; history = ds.history; img = ds.img; imgBitmap = ds.imgBitmap; rebase = rebaseByOrient[currentOrientation];
+  }
+  function saveCurrentOrientationState() {
+    const ds = datasets[currentOrientation];
+    ds.data = data; ds.history = history; ds.img = img; ds.imgBitmap = imgBitmap; // objects are by reference
+    rebaseByOrient[currentOrientation] = { ...rebaseByOrient[currentOrientation] }; // keep current values
+  }
+  function loadOrientation(newOri) {
+    saveCurrentOrientationState();
+    currentOrientation = newOri;
+    bindOrientationAliases();
+    loadRebaseToUI();
+    pendingRegionFirst = null; stepIndex = 0;
+    resetSteps(); fitView(); draw();
+  }
+  orientationSelect.addEventListener('change', (e) => loadOrientation(e.target.value));
+
+  // ---------- Image loading (per orientation) ----------
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      try { imgBitmap = window.createImageBitmap ? await createImageBitmap(file) : null; } catch(_) { imgBitmap = null; }
+      let localBitmap = null;
+      try { localBitmap = window.createImageBitmap ? await createImageBitmap(file) : null; } catch(_) { localBitmap = null; }
       const fr = new FileReader();
       fr.onload = () => {
         const im = new Image();
-        im.onload = () => { img = im; fitView(); draw(); };
+        im.onload = () => {
+          // Save into this orientation's dataset
+          const ds = datasets[currentOrientation];
+          ds.img = im; ds.imgBitmap = localBitmap;
+          bindOrientationAliases();
+          fitView(); draw();
+        };
         im.onerror = () => alert('Failed to decode image. Try a different file.');
         im.src = String(fr.result);
       };
@@ -426,7 +458,8 @@
   });
 
   function fitView() {
-    resizeCanvasToDisplaySize(); if (!img) return;
+    resizeCanvasToDisplaySize();
+    if (!img) return;
     const cw = canvas.width, ch = canvas.height;
     const sx = cw / img.width, sy = ch / img.height;
     const scale = Math.min(sx, sy) * 0.95;
@@ -437,8 +470,14 @@
   window.addEventListener('resize', () => { resizeCanvasToDisplaySize(); fitView(); draw(); });
 
   // ---------- Coordinate math ----------
+  function resizeCanvasToDisplaySize() {
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width * dpr));
+    const height = Math.max(1, Math.floor(rect.height * dpr));
+    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+  }
   function canvasToImage(x, y) { return { x: (x - view.tx) / view.scale, y: (y - view.ty) / view.scale }; }
-  function imageToCanvas(x, y) { return { x: x * view.scale + view.tx, y: y * view.scale + view.ty }; }
   function clampToImage(pt) { if (!img) return pt; return { x: Math.max(0, Math.min(img.width, pt.x)), y: Math.max(0, Math.min(img.height, pt.y)) }; }
 
   // ---------- Draw ----------
@@ -448,7 +487,7 @@
     ctx.clearRect(0,0,canvas.width, canvas.height);
     ctx.fillStyle = '#0a0f14'; ctx.fillRect(0,0,canvas.width, canvas.height);
 
-    const baseImage = imgBitmap || img;
+    const baseImage = (datasets[currentOrientation].imgBitmap || datasets[currentOrientation].img);
     if (baseImage) {
       ctx.setTransform(view.scale, 0, 0, view.scale, view.tx, view.ty);
       ctx.drawImage(baseImage, 0, 0);
@@ -462,7 +501,7 @@
       ctx.setTransform(1,0,0,1,0,0);
       ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
       ctx.fillStyle = '#9bb0c6';
-      ctx.fillText('Upload a screenshot to begin mapping.', 16, 24);
+      ctx.fillText('Upload a screenshot for the ' + currentOrientation + ' orientation to begin mapping.', 16, 24);
     }
   }
 
@@ -562,7 +601,7 @@
   clearAllBtn.addEventListener('click', (e) => {
     const alsoImage = e.shiftKey; // hold Shift to clear screenshot too
     data = {}; history = []; pendingRegionFirst = null; stepIndex = 0;
-    if (alsoImage) { img = null; imgBitmap = null; }
+    if (alsoImage) { datasets[currentOrientation].img = null; datasets[currentOrientation].imgBitmap = null; bindOrientationAliases(); }
     resetSteps(); draw();
   });
 
@@ -570,12 +609,12 @@
   exportJsonBtn.addEventListener('click', () => {
     const isUS = (variantSelect && variantSelect.value) === 'US';
     const payload = buildExportPayload(isUS);
-    // Safety: block impossible settings
-    if (rebase.enabled && (!rebase.baseW || !rebase.baseH)) {
-      alert('Rebase enabled but Base W/H not set. Disable Rebase or enter Base W/H.');
+    if (rebaseByOrient[currentOrientation].enabled && (!rebaseByOrient[currentOrientation].baseW || !rebaseByOrient[currentOrientation].baseH)) {
+      alert('Rebase enabled but Base W/H not set for this orientation. Disable Rebase or enter Base W/H.');
       return;
     }
-    downloadJSON(payload, 'roulette-mapping.json');
+    const name = `roulette-mapping_${currentOrientation}.json`;
+    downloadJSON(payload, name);
   });
 
   openJsonBtn.addEventListener('click', () => {
@@ -587,7 +626,7 @@
   });
 
   openOverlayBtn.addEventListener('click', () => {
-    if (!img) return alert('Upload a screenshot first.');
+    if (!img) return alert('Upload a screenshot first (for this orientation).');
     const off = document.createElement('canvas'); off.width = img.width; off.height = img.height;
     const octx = off.getContext('2d');
     const base = imgBitmap || img; octx.drawImage(base, 0, 0);
@@ -601,11 +640,30 @@
     try {
       const payload = JSON.parse(text);
       if (payload && payload.points && typeof payload.points === 'object') {
-        data = payload.points;
-        if (payload.meta && typeof payload.meta.racetrack === 'boolean') racetrackToggle.checked = payload.meta.racetrack;
+        const incomingOri = (payload.meta && payload.meta.orientation) || currentOrientation;
+        if (incomingOri !== currentOrientation) {
+          const useIt = confirm(`This JSON says orientation: "${incomingOri}". Load into that orientation? (OK = switch)`);
+          if (useIt) { loadOrientation(incomingOri); }
+        }
+        datasets[currentOrientation].data = payload.points;
+        bindOrientationAliases();
+        if (payload.meta && payload.meta.racetrack != null) racetrackToggle.checked = !!payload.meta.racetrack;
         if (payload.layout) variantSelect.value = payload.layout === 'US' ? 'US' : 'EU';
         if (payload.meta && payload.meta.calibration && payload.meta.calibration.grid_bbox) {
           const r = payload.meta.calibration.grid_bbox; data['calib_grid_bbox'] = { type:'region', x1:r.x1, y1:r.y1, x2:r.x2, y2:r.y2 };
+        }
+        // Rebase import if present
+        if (payload.meta && payload.meta.rebase) {
+          rebaseByOrient[currentOrientation] = {
+            enabled: !!payload.meta.rebase.enabled,
+            baseW: Number(payload.meta.rebase.base_width)||0,
+            baseH: Number(payload.meta.rebase.base_height)||0,
+            offX: Array.isArray(payload.meta.rebase.offset)? Number(payload.meta.rebase.offset[0])||0 : 0,
+            offY: Array.isArray(payload.meta.rebase.offset)? Number(payload.meta.rebase.offset[1])||0 : 0,
+            scaleX: Array.isArray(payload.meta.rebase.scale)? Number(payload.meta.rebase.scale[0])||1 : 1,
+            scaleY: Array.isArray(payload.meta.rebase.scale)? Number(payload.meta.rebase.scale[1])||1 : 1,
+          };
+          loadRebaseToUI();
         }
         history = []; resetSteps(); draw(); alert('Mapping JSON imported.');
       } else { alert('Invalid JSON format.'); }
@@ -623,29 +681,25 @@
         tool: 'roulette-mapper-standalone', version: 4,
         timestamp: new Date().toISOString(),
         image: img ? { width: img.width, height: img.height } : null,
+        orientation: currentOrientation,
         racetrack: racetrackToggle.checked,
-        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region' ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null
+        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region' ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null,
+        rebase: {
+          enabled: rebaseByOrient[currentOrientation].enabled,
+          base_width: rebaseByOrient[currentOrientation].baseW,
+          base_height: rebaseByOrient[currentOrientation].baseH,
+          offset: [rebaseByOrient[currentOrientation].offX, rebaseByOrient[currentOrientation].offY],
+          scale: [rebaseByOrient[currentOrientation].scaleX, rebaseByOrient[currentOrientation].scaleY],
+        },
+        image_size_mapped: img ? [img.width, img.height] : [0,0]
       },
       regions,
-      // also include the raw points for debugging/backward-compat
       points: data
     };
-
-    // NEW: append rebase metadata
-    payload.meta.rebase = {
-      enabled: rebase.enabled,
-      base_width: rebase.baseW,
-      base_height: rebase.baseH,
-      offset: [rebase.offX, rebase.offY],
-      scale: [rebase.scaleX, rebase.scaleY],
-    };
-    payload.meta.image_size_mapped = img ? [img.width, img.height] : [0,0];
-
     return payload;
   }
 
   function buildRegionsFromData(points, isUS){
-    // Minimal schema-friendly exporter (buttons, numbers_grid, specials, racetrack, meta)
     const regions = {
       buttons: { Red:[], Black:[], Green:[], Even:[], Odd:[], Low:[], High:[], '1st12':[], '2nd12':[], '3rd12':[], col1:[], col2:[], col3:[], Double:[] },
       numbers_grid: {},
@@ -718,26 +772,19 @@
     return regions;
   }
 
-  // REPLACED: pickPoint / pickRegion now apply rebase on export
-  function pickPoint(v){
-    if (!(v && v.type==='point')) return [];
-    const t = applyRebase({ x: v.x, y: v.y });
-    return [t.x, t.y];
-  }
-  function pickRegion(v){
-    if (!(v && v.type==='region')) return [];
-    const p1 = applyRebase({ x: v.x1, y: v.y1 });
-    const p2 = applyRebase({ x: v.x2, y: v.y2 });
-    return { x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y };
-  }
+  function pickPoint(v){ if (!(v && v.type==='point')) return []; const t = applyRebase({ x: v.x, y: v.y }); return [t.x, t.y]; }
+  function pickRegion(v){ if (!(v && v.type==='region')) return []; const p1 = applyRebase({ x: v.x1, y: v.y1 }); const p2 = applyRebase({ x: v.x2, y: v.y2 }); return { x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y }; }
 
   function downloadJSON(obj, filename) { const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }
   function escapeHtml(str) { return str.replace(/[&<>\'\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
   // ---------- Init ----------
-  resizeCanvasToDisplaySize(); resetSteps(); fitView(); draw();
-  // Init rebase state from UI
-  syncRebaseFromUI();
+  function initialBind() {
+    bindOrientationAliases();
+    resizeCanvasToDisplaySize(); resetSteps(); fitView(); draw();
+    loadRebaseToUI();
+  }
+  initialBind();
 })();
 </script>
 </body>
