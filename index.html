@@ -41,11 +41,11 @@
     .small{font-size:12px; color:var(--muted)}
     .legend{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; font-size:12px; color:var(--muted)}
     .badge{padding:2px 6px; border-radius:6px; font-weight:700; font-size:11px}
-    .b-lose{background:#2b1f0c; color:#ffb020}
-    .b-win{background:#0f2a18; color:#1bd760}
-    .b-unk1{background:#0b2730; color:#33d1ff}
-    .b-unk2{background:#1c1530; color:#b08cff}
-    .b-unk3{background:#2b2a10; color:#ffe666}
+    .b-lose{background:#2b1f0c; color:var(--orange)}
+    .b-win{background:#0f2a18; color:var(--green)}
+    .b-unk1{background:#0b2730; color:var(--cyan)}
+    .b-unk2{background:#1c1530; color:var(--violet)}
+    .b-unk3{background:#2b2a10; color:var(--yellow)}
     #canvasLegend{position:absolute; left:6px; top:6px; background:rgba(0,0,0,.45); padding:6px 8px; border-radius:8px; font:12px ui-monospace, Menlo, Consolas, monospace; color:#cbd5e1; z-index:2; pointer-events:none}
     #canvasLegend .row{display:flex; gap:8px; align-items:center}
     #canvasLegend .dot{width:10px; height:10px; border-radius:50%}
@@ -157,6 +157,8 @@
 
       <div class="group">
         <h2>Mapping</h2>
+
+        <!-- These two selects still work exactly like before -->
         <div class="row">
           <label class="nowrap" for="variantSelect">Variant</label>
           <select id="variantSelect">
@@ -172,21 +174,22 @@
             <option value="portrait">Portrait</option>
           </select>
         </div>
+
         <div class="status">
           <span id="stepLabel" class="pill">—</span>
           <span id="stepHelp" class="small">Click to start…</span>
         </div>
+
         <div class="sep"></div>
         <div class="row">
           <button id="undoBtn">Undo</button>
           <button id="skipBtn" class="warn">Skip</button>
-          <button id="autoBtn" class="primary" title="Auto-map grid bets from WIN+LOSE using current options">AUTO</button>
         </div>
         <div class="row">
           <label class="nowrap" for="depthSelect">Depth</label>
           <select id="depthSelect">
-            <option value="basic" selected>Basic (grid bets)</option>
-            <option value="full">Full (adds all splits & corners)</option>
+            <option value="basic" selected>Basic (≈80–84)</option>
+            <option value="full">Full (ALL bets)</option>
           </select>
           <label class="nowrap" style="margin-left:8px"><input id="racetrackToggle" type="checkbox"/> Include Racetrack steps</label>
         </div>
@@ -217,10 +220,13 @@
         <h2>Legend</h2>
         <div class="legend">
           <span>• Singles 0–36 (US adds 00)</span>
+          <span>• Colors R/B/G</span>
+          <span>• Dozens / Columns</span>
+          <span>• 1–18 / Even / Odd / 19–36</span>
           <span>• Streets (12) & Sixlines (11)</span>
-          <span>• First Four (EU) / First Five (US)</span>
+          <span>• All splits & corners (Full)</span>
+          <span>• Zero area: First Four (EU) / First Five (US)</span>
           <span>• Zero splits incl. US 0–00, 00–2/3</span>
-          <span>• (Full) All splits & corners</span>
           <span>• Buttons: Spin / Result / Double</span>
           <span>• Racetrack (optional)</span>
           <span>• Automation ROIs per HUD state</span>
@@ -265,7 +271,6 @@
   const depthSelect = document.getElementById('depthSelect');
   const variantSelect = document.getElementById('variantSelect');
   const orientationSelect = document.getElementById('orientationSelect');
-  const autoBtn = document.getElementById('autoBtn');
 
   const rebaseToggle = document.getElementById('rebaseToggle');
   const baseWidthInput = document.getElementById('baseWidth');
@@ -334,11 +339,39 @@
   const colors = { point:'#50e3c2', region:'#4aa3ff', current:'#ffa657', text:'#e7eef7', ghost:'rgba(255,255,255,0.15)' };
 
   // ---------- Grid helpers (EU/US share same 1–36 grid) ----------
-  const streets = Array.from({length:12}, (_,i) => { const a = 1 + i*3; return [a, a+1, a+2]; });
-  const sixlines = Array.from({length:11}, (_,i) => { const a = 1 + i*3; return [a, a+1, a+2, a+3, a+4, a+5]; });
-  const horizSplits = (() => { const out = []; for (const [a,b,c] of streets) out.push([a,b],[b,c]); return out; })();
-  const vertSplits = (() => { const out = []; for (let c=0;c<12;c++){ const b = 1 + 3*c, m = 2 + 3*c, t = 3 + 3*c; out.push([b,m],[m,t]); } return out; })();
-  const corners = (() => { const out = []; for (let c=0;c<11;c++){ const b1=1+3*c, m1=2+3*c, t1=3+3*c; const b2=b1+3, m2=m1+3, t2=t1+3; out.push([b1,m1,b2,m2]); out.push([m1,t1,m2,t2]); } return out; })();
+  const streets = Array.from({length:12}, (_,i) => {
+    const a = 1 + i*3; return [a, a+1, a+2]; // e.g., [1,2,3], [4,5,6], ...
+  });
+  const sixlines = Array.from({length:11}, (_,i) => {
+    const a = 1 + i*3; return [a, a+1, a+2, a+3, a+4, a+5]; // e.g., [1..6], [4..9], ...
+  });
+  const horizSplits = (() => {
+    // pairs within each street: (a-b, b-c)
+    const out = [];
+    for (const [a,b,c] of streets) out.push([a,b],[b,c]);
+    return out; // 24 pairs? (2 per street × 12 = 24) but per 3 rows it's already per street
+  })();
+  // Actually horizontal on roulette means side-by-side inside same street; above is correct (24)
+  const vertSplits = (() => {
+    // per column c=0..11: bottom-mid (1+3c,2+3c) and mid-top (2+3c,3+3c) => 24 total
+    const out = [];
+    for (let c=0;c<12;c++){
+      const b = 1 + 3*c, m = 2 + 3*c, t = 3 + 3*c;
+      out.push([b,m],[m,t]);
+    }
+    return out;
+  })();
+  const corners = (() => {
+    // For each 2x2 block across columns (c=0..10): two corners per column gap => 22
+    const out = [];
+    for (let c=0;c<11;c++){
+      const b1=1+3*c, m1=2+3*c, t1=3+3*c;
+      const b2=b1+3, m2=m1+3, t2=t1+3;
+      out.push([b1,m1,b2,m2]); // 1,2,4,5
+      out.push([m1,t1,m2,t2]); // 2,3,5,6
+    }
+    return out;
+  })();
 
   // ---------- Rebase helpers ----------
   function syncRebaseFromUI() {
@@ -382,9 +415,23 @@
   });
 
   // ---------- Orientation & state switching ----------
-  function bindOrientationAliases() { const ds = datasets[currentOrientation]; data = ds.data; history = ds.history; rebase = rebaseByOrient[currentOrientation]; }
-  function saveCurrentOrientationState() { const ds = datasets[currentOrientation]; ds.data = data; ds.history = history; rebaseByOrient[currentOrientation] = { ...rebaseByOrient[currentOrientation] }; }
-  function loadOrientation(newOri) { saveCurrentOrientationState(); currentOrientation = newOri; bindOrientationAliases(); loadRebaseToUI(); pendingRegionFirst = null; stepIndex = 0; resetSteps(); fitView(); draw(); }
+  function bindOrientationAliases() {
+    const ds = datasets[currentOrientation];
+    data = ds.data; history = ds.history; rebase = rebaseByOrient[currentOrientation];
+  }
+  function saveCurrentOrientationState() {
+    const ds = datasets[currentOrientation];
+    ds.data = data; ds.history = history;
+    rebaseByOrient[currentOrientation] = { ...rebaseByOrient[currentOrientation] };
+  }
+  function loadOrientation(newOri) {
+    saveCurrentOrientationState();
+    currentOrientation = newOri;
+    bindOrientationAliases();
+    loadRebaseToUI();
+    pendingRegionFirst = null; stepIndex = 0;
+    resetSteps(); fitView(); draw();
+  }
   orientationSelect.addEventListener('change', (e) => loadOrientation(e.target.value));
   activeStateSel.addEventListener('change', (e) => { currentState = e.target.value; resetSteps(); fitView(); draw(); });
   overlayBgSel.addEventListener('change', () => { fitView(); draw(); });
@@ -401,7 +448,12 @@
         const fr = new FileReader();
         fr.onload = () => {
           const im = new Image();
-          im.onload = () => { const ds = datasets[currentOrientation]; ds.imagesByState[stateKey] = im; ds.bitmapsByState[stateKey] = bitmap; fitView(); draw(); };
+          im.onload = () => {
+            const ds = datasets[currentOrientation];
+            ds.imagesByState[stateKey] = im;
+            ds.bitmapsByState[stateKey] = bitmap;
+            fitView(); draw();
+          };
           im.onerror = () => alert('Failed to decode image. Try a different file.');
           im.src = String(fr.result);
         };
@@ -410,119 +462,117 @@
       } catch (err) { alert('Failed to load image: ' + (err && err.message ? err.message : err)); }
     });
   }
-  [ [fileLose,'lose'], [fileWin,'win'], [fileUnk1,'unk1'], [fileUnk2,'unk2'], [fileUnk3,'unk3'] ].forEach(([el, key]) => bindFileInput(el, key));
+  [ [fileLose,'lose'], [fileWin,'win'], [fileUnk1,'unk1'], [fileUnk2,'unk2'], [fileUnk3,'unk3'] ]
+    .forEach(([el, key]) => bindFileInput(el, key));
 
   // ---------- Build Steps ----------
+  function buildSteps(includeRacetrack, depth, variant) {
+    const s = [];
+    const isUS = variant === 'US';
 
-function buildSteps(includeRacetrack, depth, variant) {
-  const s = [];
-  const isUS = variant === 'US';
-  const S = currentState;
-  const SLabel = STATE_LABEL[S];
+    // 1) AUTOMATION FIRST (per active state)
+    const S = currentState; const SLabel = STATE_LABEL[S];
+    s.push({ key:`auto_white_box__${S}`,      label:`AUTO (${SLabel}): WHITE indicator (bbox)`, type:'region', help:'Drag tight around the WHITE indicator (single label/icon).' });
+    s.push({ key:`auto_center_q1__${S}`, label:`AUTO (${SLabel}): CENTER quad – TL`, type:'point', help:'Top-Left corner of center number tile. Tilt OK.' });
+    s.push({ key:`auto_center_q2__${S}`, label:`AUTO (${SLabel}): CENTER quad – TR`, type:'point', help:'Top-Right corner of center number tile.' });
+    s.push({ key:`auto_center_q3__${S}`, label:`AUTO (${SLabel}): CENTER quad – BR`, type:'point', help:'Bottom-Right corner of center number tile.' });
+    s.push({ key:`auto_center_q4__${S}`, label:`AUTO (${SLabel}): CENTER quad – BL`, type:'point', help:'Bottom-Left corner of center number tile.' });
+    s.push({ key:`auto_left_q1__${S}`,  label:`AUTO (${SLabel}): LEFT quad – TL (optional)`,  type:'point', help:'Only if visible. Four corners like CENTER.' });
+    s.push({ key:`auto_left_q2__${S}`,  label:`AUTO (${SLabel}): LEFT quad – TR (optional)`,  type:'point' });
+    s.push({ key:`auto_left_q3__${S}`,  label:`AUTO (${SLabel}): LEFT quad – BR (optional)`,  type:'point' });
+    s.push({ key:`auto_left_q4__${S}`,  label:`AUTO (${SLabel}): LEFT quad – BL (optional)`,  type:'point' });
+    s.push({ key:`auto_right_q1__${S}`, label:`AUTO (${SLabel}): RIGHT quad – TL (optional)`, type:'point', help:'Only if visible. Four corners like CENTER.' });
+    s.push({ key:`auto_right_q2__${S}`, label:`AUTO (${SLabel}): RIGHT quad – TR (optional)`, type:'point' });
+    s.push({ key:`auto_right_q3__${S}`, label:`AUTO (${SLabel}): RIGHT quad – BR (optional)`, type:'point' });
+    s.push({ key:`auto_right_q4__${S}`, label:`AUTO (${SLabel}): RIGHT quad – BL (optional)`, type:'point' });
+    s.push({ key:`auto_center_arc_box__${S}`, label:`AUTO (${SLabel}): Center ARC panel (bbox, optional)`, type:'region', help:'Optional helper crop around the 3-tile center arc.' });
 
-  // 1) Calibration FIRST
-  s.push({ key: 'calib_grid_bbox', label: 'Calibration: Numbers grid bbox', type: 'region', help: 'Drag tight around the 1–36 grid.' });
+    // 2) TABLE BASICS (Singles/Buttons/Groups)
+    s.push({ key:`single_0`, label:`Number 0`, type:'point', help:'Click center of 0. (US adds 00 later.)' });
+    if (isUS) s.push({ key:`single_00`, label:`Number 00 (US only)`, type:'point', help:'Click center of 00.' });
+    for (let n = 1; n <= 36; n++) s.push({ key:`single_${n}`, label:`Number ${n}`, type:'point', help:`Click center of ${n}.` });
 
-  // 2) (optional) automation helpers (unchanged)
-  s.push({ key:`auto_white_box__${S}`,      label:`AUTO (${SLabel}): WHITE indicator (bbox)`, type:'region', help:'Drag tight around the WHITE indicator (single label/icon).' });
-  s.push({ key:`auto_center_q1__${S}`, label:`AUTO (${SLabel}): CENTER quad – TL`, type:'point', help:'Top-Left corner of center number tile. Tilt OK.' });
-  s.push({ key:`auto_center_q2__${S}`, label:`AUTO (${SLabel}): CENTER quad – TR`, type:'point' });
-  s.push({ key:`auto_center_q3__${S}`, label:`AUTO (${SLabel}): CENTER quad – BR`, type:'point' });
-  s.push({ key:`auto_center_q4__${S}`, label:`AUTO (${SLabel}): CENTER quad – BL`, type:'point' });
-  s.push({ key:`auto_left_q1__${S}`,  label:`AUTO (${SLabel}): LEFT quad – TL (optional)`,  type:'point' });
-  s.push({ key:`auto_left_q2__${S}`,  label:`AUTO (${SLabel}): LEFT quad – TR (optional)`,  type:'point' });
-  s.push({ key:`auto_left_q3__${S}`,  label:`AUTO (${SLabel}): LEFT quad – BR (optional)`,  type:'point' });
-  s.push({ key:`auto_left_q4__${S}`,  label:`AUTO (${SLabel}): LEFT quad – BL (optional)`,  type:'point' });
-  s.push({ key:`auto_right_q1__${S}`, label:`AUTO (${SLabel}): RIGHT quad – TL (optional)`, type:'point' });
-  s.push({ key:`auto_right_q2__${S}`, label:`AUTO (${SLabel}): RIGHT quad – TR (optional)`, type:'point' });
-  s.push({ key:`auto_right_q3__${S}`, label:`AUTO (${SLabel}): RIGHT quad – BR (optional)`, type:'point' });
-  s.push({ key:`auto_right_q4__${S}`, label:`AUTO (${SLabel}): RIGHT quad – BL (optional)`, type:'point' });
-  s.push({ key:`auto_center_arc_box__${S}`, label:`AUTO (${SLabel}): Center ARC panel (bbox, optional)`, type:'region' });
+    s.push({ key:'color_red',   label:'Color Red',   type:'point', help:'Click the RED area/button.' });
+    s.push({ key:'color_black', label:'Color Black', type:'point', help:'Click the BLACK area/button.' });
+    s.push({ key:'color_green', label:'Color Green', type:'point', help:'If present; else use 0/00.' });
 
-  // 3) Manual points that AUTO will generate too (you can refine after)
-  s.push({ key:`single_0`, label:`Number 0`, type:'point' });
-  if (isUS) s.push({ key:`single_00`, label:`Number 00 (US only)`, type:'point' });
-  for (let n = 1; n <= 36; n++) s.push({ key:`single_${n}`, label:`Number ${n}`, type:'point' });
+    s.push({ key:'dozen_1', label:'Dozen: 1st 12', type:'point', help:'Covers 1–12.' });
+    s.push({ key:'dozen_2', label:'Dozen: 2nd 12', type:'point', help:'Covers 13–24.' });
+    s.push({ key:'dozen_3', label:'Dozen: 3rd 12', type:'point', help:'Covers 25–36.' });
 
-  for (let i=0;i<12;i++){ const a = 1 + i*3, b=a+1, c=a+2; s.push({ key:`street_${i+1}`, label:`Street ${i+1} (${a},${b},${c})`, type:'point' }); }
-  for (let i=0;i<11;i++){ const L = [1+i*3,2+i*3,3+i*3,4+i*3,5+i*3,6+i*3]; s.push({ key:`sixline_${i+1}`, label:`Sixline ${i+1} (${L.join(',')})`, type:'point' }); }
+    s.push({ key:'column_1', label:'Column 1', type:'point', help:'Numbers: 1,4,7,…,34.' });
+    s.push({ key:'column_2', label:'Column 2', type:'point', help:'Numbers: 2,5,8,…,35.' });
+    s.push({ key:'column_3', label:'Column 3', type:'point', help:'Numbers: 3,6,9,…,36.' });
 
+    s.push({ key:'even_low',  label:'Low (1–18)',  type:'point' });
+    s.push({ key:'even_even', label:'Even',        type:'point' });
+    s.push({ key:'even_odd',  label:'Odd',         type:'point' });
+    s.push({ key:'even_high', label:'High (19–36)',type:'point' });
 
-// — Big buttons & ranges (manual steps; AUTO may prefill)
-s.push({ key:'column_1', label:'Column 1', type:'point' });
-s.push({ key:'column_2', label:'Column 2', type:'point' });
-s.push({ key:'column_3', label:'Column 3', type:'point' });
+    // Streets / Sixlines with explicit number lists in help
+    for (let i=0;i<12;i++){
+      const [a,b,c] = streets[i];
+      s.push({ key:`street_${i+1}`, label:`Street ${i+1} (${a},${b},${c})`, type:'point',
+        help:`Click the STREET spot aligned with ${a}–${b}–${c}.` });
+    }
+    for (let i=0;i<11;i++){
+      const L = sixlines[i];
+      s.push({ key:`sixline_${i+1}`, label:`Sixline ${i+1} (${L.join(',')})`, type:'point',
+        help:`Click the SIXLINE spot covering ${L[0]}–${L[5]}.` });
+    }
 
-s.push({ key:'dozen_1', label:'1st12', type:'point' });
-s.push({ key:'dozen_2', label:'2nd12', type:'point' });
-s.push({ key:'dozen_3', label:'3rd12', type:'point' });
+    // Zero area
+    if (isUS) {
+      s.push({ key:'first_five', label:'First Five (0–00–1–2–3)', type:'point', help:'Click the basket area (US only).' });
+      s.push({ key:'split_0_00', label:'Split 0–00', type:'point' });
+      s.push({ key:'split_00_2', label:'Split 00–2', type:'point' });
+      s.push({ key:'split_00_3', label:'Split 00–3', type:'point' });
+      s.push({ key:'split_0_1', label:'Split 0–1', type:'point' });
+      s.push({ key:'split_0_2', label:'Split 0–2', type:'point' });
+      s.push({ key:'split_0_3', label:'Split 0–3', type:'point' });
+    } else {
+      s.push({ key:'first_four', label:'First Four (0–1–2–3)', type:'point', help:'Click the first four area (EU).' });
+      s.push({ key:'split_0_1', label:'Split 0–1', type:'point' });
+      s.push({ key:'split_0_2', label:'Split 0–2', type:'point' });
+      s.push({ key:'split_0_3', label:'Split 0–3', type:'point' });
+    }
 
-// colors
-s.push({ key:'color_red',   label:'Red',   type:'point' });
-s.push({ key:'color_black', label:'Black', type:'point' });
-s.push({ key:'color_green', label:'Green', type:'point' });
+    // Calibration + Buttons
+    s.push({ key:'calib_grid_bbox', label:'Calibration: Numbers grid bbox', type:'region', help:'Drag tightly around the 1–36 grid.' });
+    s.push({ key:'btn_spin',   label:'Spin button (bbox)',   type:'region' });
+    s.push({ key:'btn_result', label:'Result panel (bbox)',  type:'region' });
+    s.push({ key:'btn_double', label:'Double button (bbox)', type:'region' });
 
-// even/odd & low/high
-s.push({ key:'even_even', label:'Even', type:'point' });
-s.push({ key:'even_odd',  label:'Odd',  type:'point' });
-s.push({ key:'even_low',  label:'1–18 (Low)',  type:'point' });
-s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
+    // Racetrack (optional)
+    if (includeRacetrack) {
+      s.push({ key:'rt_bbox', label:'Racetrack bbox', type:'region' });
+      s.push({ key:'rt_voisins',   label:'Racetrack: Voisins',   type:'point' });
+      s.push({ key:'rt_tiers',     label:'Racetrack: Tiers',     type:'point' });
+      s.push({ key:'rt_orphelins', label:'Racetrack: Orphelins', type:'point' });
+      s.push({ key:'rt_jeu_zero',  label:'Racetrack: Jeu Zéro',  type:'point' });
+    }
 
+    // 3) FULL DEPTH: add all regular splits & corners with explicit pairs/blocks
+    if (depth === 'full') {
+      // Horizontal splits (within each street)
+      for (const [a,b] of horizSplits) {
+        s.push({ key:`split_h_${a}_${b}`, label:`Split ${a}–${b} (street)`, type:'point',
+          help:`Click the split line between ${a} and ${b} (same street).` });
+      }
+      // Vertical splits (between rows)
+      for (const [a,b] of vertSplits) {
+        s.push({ key:`split_v_${a}_${b}`, label:`Split ${a}–${b} (vertical)`, type:'point',
+          help:`Click the split line between ${a} and ${b} (vertical).` });
+      }
+      // Corners (2x2 blocks)
+      for (const [p,q,r,t] of corners) {
+        s.push({ key:`corner_${p}_${q}_${r}_${t}`, label:`Corner ${p}-${q}-${r}-${t}`, type:'point',
+          help:`Click the center of the 2×2 corner (${p},${q},${r},${t}).` });
+      }
+    }
 
-
-
-  // Zero area + all splits/corners (AUTO will place)
-  if (isUS) {
-    s.push({ key:'first_five', label:'First Five (0–00–1–2–3)', type:'point' });
-    s.push({ key:'split_0_00', label:'Split 0–00', type:'point' });
-    s.push({ key:'split_00_2', label:'Split 00–2', type:'point' });
-    s.push({ key:'split_00_3', label:'Split 00–3', type:'point' });
-    s.push({ key:'split_0_1', label:'Split 0–1', type:'point' });
-    s.push({ key:'split_0_2', label:'Split 0–2', type:'point' });
-    s.push({ key:'split_0_3', label:'Split 0–3', type:'point' });
-  } else {
-    s.push({ key:'first_four', label:'First Four (0–1–2–3)', type:'point' });
-    s.push({ key:'split_0_1', label:'Split 0–1', type:'point' });
-    s.push({ key:'split_0_2', label:'Split 0–2', type:'point' });
-    s.push({ key:'split_0_3', label:'Split 0–3', type:'point' });
+    return s;
   }
-
-
-  // Trios (three-number bets): 0-1-2 and 0-2-3
-  s.push({ key:'trio_0_1_2', label:'Trio 0–1–2', type:'point' });
-  s.push({ key:'trio_0_2_3', label:'Trio 0–2–3', type:'point' });
-
-
-
-  // Full depth (all splits & corners)
-  const streets = Array.from({length:12}, (_,i)=>[1+i*3,2+i*3,3+i*3]);
-  const sixlines = Array.from({length:11}, (_,i)=>[1+i*3,2+i*3,3+i*3,4+i*3,5+i*3,6+i*3]);
-  const horizSplits = streets.flatMap(([a,b,c])=>[[a,b],[b,c]]);
-  const vertSplits  = Array.from({length:12},(_,c)=>{const b=1+3*c,m=2+3*c,t=3+3*c; return [[b,m],[m,t]];}).flat();
-  const corners     = Array.from({length:11},(_,c)=>{const b1=1+3*c,m1=2+3*c,t1=3+3*c,b2=b1+3,m2=m1+3,t2=t1+3;return [[b1,m1,b2,m2],[m1,t1,m2,t2]];}).flat();
-
-  for (const [a,b] of horizSplits) s.push({ key:`split_h_${a}_${b}`, label:`Split ${a}–${b} (street)`, type:'point' });
-  for (const [a,b] of vertSplits)  s.push({ key:`split_v_${a}_${b}`, label:`Split ${a}–${b} (vertical)`, type:'point' });
-  for (const [p,q,r,t] of corners) s.push({ key:`corner_${p}_${q}_${r}_${t}`, label:`Corner ${p}-${q}-${r}-${t}`, type:'point' });
-
-  // Buttons & misc remain manual (not auto)
-  s.push({ key:'btn_spin',   label:'Spin button (bbox)',   type:'region' });
-  s.push({ key:'btn_result', label:'Result panel (bbox)',  type:'region' });
-  s.push({ key:'btn_double', label:'Double button (bbox)', type:'region' });
-
-  if (includeRacetrack) {
-    s.push({ key:'rt_bbox', label:'Racetrack bbox', type:'region' });
-    s.push({ key:'rt_voisins',   label:'Racetrack: Voisins',   type:'point' });
-    s.push({ key:'rt_tiers',     label:'Racetrack: Tiers',     type:'point' });
-    s.push({ key:'rt_orphelins', label:'Racetrack: Orphelins', type:'point' });
-    s.push({ key:'rt_jeu_zero',  label:'Racetrack: Jeu Zéro',  type:'point' });
-  }
-
-  return s;
-}
-
-
-
 
   function resetSteps() {
     steps = buildSteps(
@@ -535,21 +585,27 @@ s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
     updateUI(); draw();
   }
 
+  // ---------- View / background ----------
   function getBackgroundImageForOverlay() {
     const ds = datasets[currentOrientation];
     const choice = overlayBgSel.value === 'active' ? currentState : overlayBgSel.value;
     return (ds.bitmapsByState[choice] || ds.imagesByState[choice] || null);
   }
+
   function fitView() {
     resizeCanvasToDisplaySize();
-    const base = getBackgroundImageForOverlay(); if (!base) return;
+    const base = getBackgroundImageForOverlay();
+    if (!base) return;
     const cw = canvas.width, ch = canvas.height;
     const sx = cw / base.width, sy = ch / base.height;
     const scale = Math.min(sx, sy) * 0.95;
     const imgW = base.width * scale, imgH = base.height * scale;
     view.scale = scale; view.tx = (cw - imgW) / 2; view.ty = (ch - imgH) / 2;
   }
+
   window.addEventListener('resize', () => { resizeCanvasToDisplaySize(); fitView(); draw(); });
+
+  // ---------- Coordinate math ----------
   function resizeCanvasToDisplaySize() {
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const rect = canvas.getBoundingClientRect();
@@ -563,14 +619,16 @@ s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
     return { x: Math.max(0, Math.min(base.width, pt.x)), y: Math.max(0, Math.min(base.height, pt.y)) };
   }
 
+  // ---------- Draw ----------
   function draw() {
     resizeCanvasToDisplaySize();
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0,0,canvas.width, canvas.height);
-    ctx.fillStyle = '#0a0f14';
-    ctx.fillRect(0,0,canvas.width, canvas.height);
+    ctx.fillStyle = '#0a0f14'; ctx.fillRect(0,0,canvas.width, canvas.height);
+
     const base = getBackgroundImageForOverlay();
     document.getElementById('canvasLegend').style.display = base ? 'block' : 'none';
+
     if (base) {
       ctx.setTransform(view.scale, 0, 0, view.scale, view.tx, view.ty);
       ctx.drawImage(base, 0, 0);
@@ -578,8 +636,7 @@ s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
       const st = steps[stepIndex];
       if (st && st.type === 'region' && pendingRegionFirst) {
         ctx.save(); ctx.globalAlpha = 0.6; ctx.strokeStyle = colors.current; ctx.setLineDash([8,6]);
-        drawCrosshair(pendingRegionFirst.x, pendingRegionFirst.y, colors.current);
-        ctx.restore();
+        drawCrosshair(pendingRegionFirst.x, pendingRegionFirst.y, colors.current); ctx.restore();
       }
     } else {
       ctx.setTransform(1,0,0,1,0,0);
@@ -591,14 +648,19 @@ s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
 
   function drawOverlay(g) {
     const sc = view.scale;
-    g.lineWidth = 2 / sc;
-    g.font = `${12 / sc}px ui-monospace, Menlo, Consolas, monospace`;
-    g.textBaseline = 'top';
-    const mode = overlayModeSel.value;
+    g.lineWidth = 2 / sc; g.font = `${12 / sc}px ui-monospace, Menlo, Consolas, monospace`; g.textBaseline = 'top';
+
+    const mode = overlayModeSel.value; // 'active' | 'all'
     const toDrawStates = mode === 'all' ? STATES : [currentState];
+
     drawSharedMappings(g);
-    for (const s of toDrawStates) { const col = STATE_COLOR[s]; drawAutomationForState(g, s, col); }
+
+    for (const s of toDrawStates) {
+      const col = STATE_COLOR[s];
+      drawAutomationForState(g, s, col);
+    }
   }
+
   function drawSharedMappings(g){
     const sc = view.scale;
     for (const [key, val] of Object.entries(data)) {
@@ -616,69 +678,88 @@ s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
       }
     }
   }
+
   function drawAutomationForState(g, state, col){
     const drawReg = (keyBase, label) => {
-      const v = data[`${keyBase}__${state}`]; if (!(v && v.type==='region')) return;
+      const v = data[`${keyBase}__${state}`];
+      if (!(v && v.type==='region')) return;
       const {x1,y1,x2,y2} = v; const w=x2-x1, h=y2-y1;
       g.strokeStyle = col.stroke; g.setLineDash([]); g.strokeRect(x1,y1,w,h);
       g.fillStyle = col.fill; g.fillRect(x1,y1,w,h);
       g.fillStyle = '#cbd5e1'; g.fillText(`${label} (${STATE_LABEL[state]})`, x1 + 6 / view.scale, y1 + 6 / view.scale);
     };
+
     const drawQuadPoly = (base, label) => {
       const q1 = data[`${base}_q1__${state}`], q2=data[`${base}_q2__${state}`], q3=data[`${base}_q3__${state}`], q4=data[`${base}_q4__${state}`];
       if (!(q1&&q2&&q3&&q4)) return;
       const pts = [q1,q2,q3,q4];
-      g.save(); g.setLineDash([6,5]); g.strokeStyle = col.stroke;
-      g.beginPath(); g.moveTo(pts[0].x, pts[0].y); for (let i=1;i<pts.length;i++) g.lineTo(pts[i].x, pts[i].y);
-      g.closePath(); g.stroke(); g.setLineDash([]); g.fillStyle = col.stroke;
-      const r = 4 / view.scale; for (const p of pts) { g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI*2); g.fill(); }
+      g.save();
+      g.setLineDash([6,5]);
+      g.strokeStyle = col.stroke;
+      g.beginPath();
+      g.moveTo(pts[0].x, pts[0].y);
+      for (let i=1;i<pts.length;i++) g.lineTo(pts[i].x, pts[i].y);
+      g.closePath();
+      g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = col.stroke;
+      const r = 4 / view.scale;
+      for (const p of pts) { g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI*2); g.fill(); }
       const minX = Math.min(...pts.map(p=>p.x)), minY = Math.min(...pts.map(p=>p.y));
       g.fillStyle = '#cbd5e1'; g.fillText(`${label} (${STATE_LABEL[state]})`, minX + 6 / view.scale, minY + 6 / view.scale);
       g.restore();
     };
+
     drawReg('auto_white_box', 'A: WHITE');
     drawReg('auto_center_arc_box', 'A: ARC panel (opt)');
-    drawQuadPoly('auto_center', 'A: CENTER quad');
+    drawQuadPoly('auto_center', 'A: CENTER quad');   // non-rect
     const hasLeft  = ['q1','q2','q3','q4'].every(sfx => !!data[`auto_left_${sfx}__${state}`]);
     const hasRight = ['q1','q2','q3','q4'].every(sfx => !!data[`auto_right_${sfx}__${state}`]);
     if (hasLeft)  drawQuadPoly('auto_left',  'A: LEFT quad');
     if (hasRight) drawQuadPoly('auto_right', 'A: RIGHT quad');
   }
+
   function drawCrosshair(x,y,col) {
-    const s = 8 / view.scale; ctx.save(); ctx.strokeStyle = col;
-    ctx.beginPath(); ctx.moveTo(x - s, y); ctx.lineTo(x + s, y);
-    ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke(); ctx.restore();
+    const s = 8 / view.scale;
+    ctx.save(); ctx.strokeStyle = col; ctx.beginPath();
+    ctx.moveTo(x - s, y); ctx.lineTo(x + s, y); ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.stroke(); ctx.restore();
   }
 
+  // ---------- UI updates ----------
   function updateUI() {
     const total = steps.length;
-    const done = steps.filter(st => (data[st.key] && !data[st.key].skipped)).length;
+    const done = steps.filter(st => data[st.key] && !data[st.key].skipped).length;
     const st = steps[stepIndex];
     stepLabel.textContent = st ? st.label : 'Finished';
-    stepHelp.textContent = st ? (st.type === 'point' ? 'POINT: click the precise spot. ' : 'REGION: two clicks (Top-Left, Bottom-Right). ') + (st.help ? `• ${st.help}` : '') : 'All steps complete.';
+    stepHelp.textContent = st ? (st.type === 'point'
+       ? 'POINT: click the precise spot. '
+       : 'REGION: two clicks (Top-Left, Bottom-Right). ')
+       + (st.help ? `• ${st.help}` : '') : 'All steps complete.';
     progressBar.style.width = total ? `${Math.round(done/total*100)}%` : '0%';
     progressText.textContent = `${done} / ${total}`;
   }
+
   function goToNextStep() {
-    for (let i = stepIndex + 1; i < steps.length; i++) {
-      const k = steps[i].key; if (!data[k] || data[k].skipped) { stepIndex = i; updateUI(); return; }
-    }
-    for (let i = 0; i < steps.length; i++) {
-      const k = steps[i].key; if (!data[k] || data[k].skipped) { stepIndex = i; updateUI(); return; }
-    }
+    for (let i = stepIndex + 1; i < steps.length; i++) { const k = steps[i].key; if (!data[k] || data[k].skipped) { stepIndex = i; updateUI(); return; } }
+    for (let i = 0; i < steps.length; i++) { const k = steps[i].key; if (!data[k] || data[k].skipped) { stepIndex = i; updateUI(); return; } }
     stepIndex = steps.length; updateUI();
   }
+
   function setData(key, value) { const prev = data[key]; data[key] = value; history.push({ key, prevValue: prev, nextValue: value }); updateUI(); draw(); }
   function skipCurrent() { const st = steps[stepIndex]; if (!st) return; setData(st.key, { skipped: true, type: st.type }); pendingRegionFirst = null; goToNextStep(); }
 
+  // ---------- Interactions ----------
   canvas.addEventListener('mousedown', (e) => {
-    const base = getBackgroundImageForOverlay(); if (!base) return;
-    if (e.button === 1 || e.button === 2 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
-      isPanning = true; panStart = { x: e.clientX, y: e.clientY }; viewStart = { tx: view.tx, ty: view.ty }; return;
-    }
-    const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
-    const cx = (e.clientX - rect.left) * dpr; const cy = (e.clientY - rect.top) * dpr;
-    const { x, y } = clampToImage(canvasToImage(cx, cy)); const st = steps[stepIndex]; if (!st) return;
+    const base = getBackgroundImageForOverlay();
+    if (!base) return;
+    if (e.button === 1 || e.button === 2 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) { isPanning = true; panStart = { x: e.clientX, y: e.clientY }; viewStart = { tx: view.tx, ty: view.ty }; return; }
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const cx = (e.clientX - rect.left) * dpr;
+    const cy = (e.clientY - rect.top) * dpr;
+    const { x, y } = clampToImage(canvasToImage(cx, cy));
+    const st = steps[stepIndex]; if (!st) return;
+
     if (st.type === 'point') { setData(st.key, { type:'point', x, y }); goToNextStep(); }
     else if (st.type === 'region') {
       if (!pendingRegionFirst) pendingRegionFirst = { x, y };
@@ -691,27 +772,30 @@ s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
     }
     draw();
   });
+
   canvas.addEventListener('mousemove', (e) => {
     if (!isPanning) return;
     const dpr = window.devicePixelRatio || 1;
-    const dx = (e.clientX - panStart.x) * dpr; const dy = (e.clientY - panStart.y) * dpr;
+    const dx = (e.clientX - panStart.x) * dpr;
+    const dy = (e.clientY - panStart.y) * dpr;
     view.tx = viewStart.tx + dx; view.ty = viewStart.ty + dy; draw();
   });
   window.addEventListener('mouseup', () => { isPanning = false; });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  const zoomAt = (scaleFactor) => {
+
+  zoomInBtn.addEventListener('click', () => zoomAt(1.15));
+  zoomOutBtn.addEventListener('click', () => zoomAt(1/1.15));
+  resetViewBtn.addEventListener('click', () => { fitView(); draw(); });
+
+  function zoomAt(scaleFactor) {
     const base = getBackgroundImageForOverlay(); if (!base) return;
     const cx = canvas.width / 2, cy = canvas.height / 2;
     const before = canvasToImage(cx, cy);
     view.scale = Math.max(0.1, Math.min(10, view.scale * scaleFactor));
     const after = canvasToImage(cx, cy);
-    view.tx += (after.x - before.x) * view.scale;
-    view.ty += (after.y - before.y) * view.scale;
-    draw();
-  };
-  zoomInBtn.addEventListener('click', () => zoomAt(1.15));
-  zoomOutBtn.addEventListener('click', () => zoomAt(1/1.15));
-  resetViewBtn.addEventListener('click', () => { fitView(); draw(); });
+    view.tx += (after.x - before.x) * view.scale; view.ty += (after.y - before.y) * view.scale; draw();
+  }
+
   undoBtn.addEventListener('click', () => {
     const last = history.pop(); if (!last) return;
     if (last.prevValue === undefined) delete data[last.key]; else data[last.key] = last.prevValue;
@@ -722,6 +806,7 @@ s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
   racetrackToggle.addEventListener('change', () => resetSteps());
   depthSelect.addEventListener('change', () => resetSteps());
   variantSelect.addEventListener('change', () => { data = {}; history = []; resetSteps(); });
+
   clearAllBtn.addEventListener('click', (e) => {
     const alsoImages = e.shiftKey;
     data = {}; history = []; pendingRegionFirst = null; stepIndex = 0;
@@ -732,206 +817,14 @@ s.push({ key:'even_high', label:'19–36 (High)', type:'point' });
     resetSteps(); draw();
   });
 
-  // ---------- AUTO Mapping (grid bets only + zero area; splits/corners when Depth=Full) ----------
-  autoBtn.addEventListener('click', () => { try { runAuto(); } catch(err){ alert('AUTO failed: ' + (err?.message || err)); } });
-  function hasBothWinLose(){ const ds = datasets[currentOrientation]; return !!(ds.imagesByState.win && ds.imagesByState.lose); }
-
-
-
-function runAuto(){
-  if (!hasBothWinLose()) { alert('AUTO needs both WIN and LOSE screenshots loaded.'); return; }
-
-  const isUS  = (variantSelect && variantSelect.value) === 'US';
-  const depth = (depthSelect && depthSelect.value) || 'basic';
-
-  // must have calibration first
-  const calib = data['calib_grid_bbox'];
-  if (!(calib && calib.type==='region')) {
-    alert('Please map "Calibration: Numbers grid bbox" first (tight around 1–36).');
-    return;
-  }
-
-  const {x1,y1,x2,y2} = calib;
-  const gw = x2 - x1, gh = y2 - y1;
-  if (gw <= 0 || gh <= 0) { alert('Invalid grid bbox.'); return; }
-
-  const cw = gw / 12, ch = gh / 3; // cell size
-  const setPoint = (k, x, y) => { data[k] = { type:'point', x, y }; };
-
-  // ----------------------------
-  // 1) Singles 1..36 (cell centers)
-  for (let n=1;n<=36;n++){
-    const col = Math.ceil(n/3);
-    const rowInCol = (n-1)%3; // 0=bottom, 1=middle, 2=top
-    const cx = x1 + (col-0.5)*cw;
-    const cy = y2 - (rowInCol+0.5)*ch;
-    setPoint(`single_${n}`, cx, cy);
-  }
-
-  // 0 / 00 positions
-  if (isUS) {
-    const cx0  = x1 - 0.5*cw, cy0  = y2 - 0.5*ch;   // 0 near bottom half
-    const cx00 = x1 - 0.5*cw, cy00 = y1 + 0.5*ch;   // 00 near top half
-    setPoint('single_0',  cx0,  cy0);
-    setPoint('single_00', cx00, cy00);
-  } else {
-    const cx0 = x1 - 0.5*cw, cy0 = (y1+y2)/2;
-    setPoint('single_0', cx0, cy0);
-  }
-
-  // helper
-  const getCenter = (n) => data[`single_${n}`];
-
-  // ----------------------------
-  // 2) Splits & Corners (full grid geometry)
-  const streets = Array.from({length:12}, (_,i) => { const a = 1 + i*3; return [a, a+1, a+2]; });
-  const sixlines = Array.from({length:11}, (_,i) => { const a = 1 + i*3; return [a, a+1, a+2, a+3, a+4, a+5]; });
-  const horizSplits = streets.flatMap(([a,b,c])=>[[a,b],[b,c]]);
-  const vertSplits  = Array.from({length:12},(_,c)=>{const b=1+3*c,m=2+3*c,t=3+3*c; return [[b,m],[m,t]];}).flat();
-  const corners     = Array.from({length:11},(_,c)=>{const b1=1+3*c,m1=2+3*c,t1=3+3*c,b2=b1+3,m2=m1+3,t2=t1+3;return [[b1,m1,b2,m2],[m1,t1,m2,t2]];}).flat();
-
-  for (const [a,b] of horizSplits){
-    const A=getCenter(a), B=getCenter(b);
-    if (A&&B) setPoint(`split_h_${a}_${b}`, (A.x+B.x)/2, (A.y+B.y)/2);
-  }
-  for (const [a,b] of vertSplits){
-    const A=getCenter(a), B=getCenter(b);
-    if (A&&B) setPoint(`split_v_${a}_${b}`, (A.x+B.x)/2, (A.y+B.y)/2);
-  }
-  for (const [p,q,r,t] of corners){
-    const P=getCenter(p), Q=getCenter(q), R=getCenter(r), T=getCenter(t);
-    if (P&&Q&&R&&T) setPoint(`corner_${p}_${q}_${r}_${t}`, (P.x+Q.x+R.x+T.x)/4, (P.y+Q.y+R.y+T.y)/4);
-  }
-
-  // ----------------------------
-  // 3) Streets & Sixlines AT THE BOTTOM EDGE
-  // A tiny offset below the grid for reliable clicks. Tune here if needed.
-  const EDGE_OFFSET = 0.01; // 1% of a cell height below y2
-
-  // Streets: center of each column, just below grid bottom
-  for (let i=0;i<12;i++){
-    const col = i+1;
-    const cx = x1 + (col-0.5)*cw;
-    const cy = y2 + EDGE_OFFSET*ch;
-    setPoint(`street_${i+1}`, cx, cy);
-  }
-
-  // Sixlines: exactly on every column boundary, just below grid bottom
-  for (let i=0;i<11;i++){
-    const cx = x1 + (i+1)*cw;   // column boundary
-    const cy = y2 + EDGE_OFFSET*ch;
-    setPoint(`sixline_${i+1}`, cx, cy);
-  }
-
-  // ----------------------------
-  // 3.5) Columns & Dozens (original JSON keys, no renaming)
-
-  // Columns: mirror distance outside the right edge; align to rows of 36/35/34
-  const COL_OFFSET = 0.5; // 0.5 * cell width to the right of x2
-  const colX = x2 + COL_OFFSET * cw;
-  setPoint('column_1', colX, y1 + 0.5 * ch); // row of 36 (top)
-  setPoint('column_2', colX, y1 + 1.5 * ch); // row of 35 (middle)
-  setPoint('column_3', colX, y1 + 2.5 * ch); // row of 34 (bottom)
-
-  // Dozens: same distance below bottom line as number centers are above it
-  const DOZEN_OFFSET = 0.35;   // ← was 0.50; smaller = closer to grid
-  const dozenY = y2 + DOZEN_OFFSET * ch;
-
-  setPoint('dozen_1', x1 +  2 * cw, dozenY); // under 4|7 crossover
-  setPoint('dozen_2', x1 +  6 * cw, dozenY); // under 16|19 crossover
-  setPoint('dozen_3', x1 + 10 * cw, dozenY); // under 28|31 crossover
-
-
-
-
-  // ----------------------------
-
-
-// 4) Zero-area special  — place at true crossovers
-// Geometry helpers from the calibrated grid:
-// x1..x2 = grid left/right, y1..y2 = grid top/bottom
-// cw = one number cell width, ch = one number cell height
-
-if (isUS) {
-  // ----- AMERICAN (double-zero) -----
-  // FIRST FIVE (0–00–1–2–3):
-  // crossover where 0, 00 meet the first column spine: on the zero/column boundary mid-height
-  // This is the vertical line x=x1 and the mid of 3-row stack -> y = (y1 + y2)/2
-  data['first_five'] = { type: 'point', x: x1, y: (y1 + y2) / 2 };
-
-  // 0–00 split: middle of the horizontal line that separates 00 (top) and 0 (bottom)
-  // Zero column spans one cell-width to the left of the grid: [x1-cw, x1]
-  // The dividing line sits halfway down the 3 rows: y = y1 + 1.5*ch
-  data['split_0_00'] = { type: 'point', x: x1 - 0.5 * cw, y: y1 + 1.5 * ch };
-
-  // 00–2 split: on the x=x1 boundary at the middle of row 2 (middle row)
-  data['split_00_2'] = { type: 'point', x: x1, y: y1 + 1.5 * ch };
-
-  // 00–3 split: on the x=x1 boundary at the middle of row 3 (top row)
-  data['split_00_3'] = { type: 'point', x: x1, y: y1 + 0.5 * ch };
-
-  // 0–1 split: on the x=x1 boundary at the middle of row 1 (bottom row)
-  data['split_0_1']  = { type: 'point', x: x1, y: y2 - 0.5 * ch };
-
-  // 0–2 split: on the x=x1 boundary at the middle of row 2
-  data['split_0_2']  = { type: 'point', x: x1, y: y1 + 1.5 * ch };
-
-  // 0–3 split: on the x=x1 boundary at the middle of row 3
-  data['split_0_3']  = { type: 'point', x: x1, y: y1 + 0.5 * ch };
-
-} else {
-  // ----- EUROPEAN (single-zero) -----
-  // FIRST FOUR (0–1–2–3):
-  // EXACTLY at the corner where 0 area meets box #1 bottom-left: (x1, y2)
-  data['first_four'] = { type: 'point', x: x1, y: y2 };
-
-  // 0–1 split: midpoint on the shared border between 0 and #1 (x = x1, bottom row mid-height)
-  data['split_0_1'] = { type: 'point', x: x1, y: y2 - 0.5 * ch };
-
-  // 0–2 split: midpoint on the shared border between 0 and #2 (x = x1, middle row mid-height)
-  data['split_0_2'] = { type: 'point', x: x1, y: y1 + 1.5 * ch };
-
-  // 0–3 split: midpoint on the shared border between 0 and #3 (x = x1, top row mid-height)
-  data['split_0_3'] = { type: 'point', x: x1, y: y1 + 0.5 * ch };
-}
-
-  // 5) Trios: exact cross points at the left grid boundary
-  // 0-1-2 is at the boundary between bottom and middle rows
-  setPoint('trio_0_1_2', x1, y2 - ch);
-  // 0-2-3 is at the boundary between top and middle rows
-  setPoint('trio_0_2_3', x1, y1 + ch);
-
-
-
-
-  // NOTE: We intentionally do NOT auto-place dozens/columns/colors/even-odd/high-low.
-  // Those stay manual by design per your request.
-
-  updateUI(); draw();
-  alert('AUTO completed. Review overlay and fine-tune if needed.');
-}
-
-
-
-
-
-
-
   // ---------- Export / Import ----------
-  openOverlayBtn.addEventListener('click', () => {
-    const base = getBackgroundImageForOverlay(); if (!base) return alert('Upload at least one state screenshot.');
-    const off = document.createElement('canvas'); off.width = base.width; off.height = base.height; const octx = off.getContext('2d');
-    octx.drawImage(base, 0, 0);
-    const bakView = { ...view }; view = { scale:1, tx:0, ty:0 }; drawOverlay(octx); view = bakView;
-    const dataURL = off.toDataURL('image/png'); const w = window.open(); w.document.write(`<img src="${dataURL}" style="max-width:100%;">`); w.document.close();
-  });
-
   exportJsonBtn.addEventListener('click', () => {
     const isUS = (variantSelect && variantSelect.value) === 'US';
     const payload = buildExportPayload(isUS);
     const name = `roulette-mapping_${currentOrientation}.json`;
     downloadJSON(payload, name);
   });
+
   openJsonBtn.addEventListener('click', () => {
     const isUS = (variantSelect && variantSelect.value) === 'US';
     const payload = buildExportPayload(isUS);
@@ -939,32 +832,57 @@ if (isUS) {
     w.document.write('<pre style="white-space:pre-wrap;word-break:break-word;font:12px ui-monospace,Menlo,Consolas,monospace;padding:12px;background:#0b0f14;color:#e7eef7;">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</pre>');
     w.document.close();
   });
+
+  openOverlayBtn.addEventListener('click', () => {
+    const base = getBackgroundImageForOverlay();
+    if (!base) return alert('Upload at least one state screenshot.');
+    const off = document.createElement('canvas'); off.width = base.width; off.height = base.height;
+    const octx = off.getContext('2d');
+    octx.drawImage(base, 0, 0);
+    const bakView = { ...view };
+    view = { scale:1, tx:0, ty:0 };
+    drawOverlay(octx);
+    view = bakView;
+    const dataURL = off.toDataURL('image/png'); const w = window.open();
+    w.document.write(`<img src="${dataURL}" style="max-width:100%;">`); w.document.close();
+  });
+
   importJsonInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0]; if (!file) return; const text = await file.text();
     try {
       const payload = JSON.parse(text);
       if (!(payload && (payload.points || payload.automation_states))) { alert('Invalid JSON format.'); return; }
+
       const incomingOri = (payload.meta && payload.meta.orientation) || currentOrientation;
-      if (incomingOri !== currentOrientation) { const useIt = confirm(`JSON orientation: "${incomingOri}". Load into that orientation? (OK = switch)`); if (useIt) { loadOrientation(incomingOri); } }
+      if (incomingOri !== currentOrientation) {
+        const useIt = confirm(`JSON orientation: "${incomingOri}". Load into that orientation? (OK = switch)`);
+        if (useIt) { loadOrientation(incomingOri); }
+      }
+
       datasets[currentOrientation].data = (payload.points && typeof payload.points==='object') ? payload.points : {};
       bindOrientationAliases();
+
+      // hydrate automation_states → internal keys
       if (payload.automation_states) {
         for (const [stateKey, block] of Object.entries(payload.automation_states)) {
           if (block.white_box) data[`auto_white_box__${stateKey}`] = regionToLocal(block.white_box);
           if (block.center_arc_box) data[`auto_center_arc_box__${stateKey}`] = regionToLocal(block.center_arc_box);
-          const qC = (block.quads && block.quads.center) || null; if (qC && qC.length===4) {
+          const qC = (block.quads && block.quads.center) || null;
+          if (qC && qC.length===4) {
             data[`auto_center_q1__${stateKey}`] = pointToLocal(qC[0]);
             data[`auto_center_q2__${stateKey}`] = pointToLocal(qC[1]);
             data[`auto_center_q3__${stateKey}`] = pointToLocal(qC[2]);
             data[`auto_center_q4__${stateKey}`] = pointToLocal(qC[3]);
           }
-          const qL = (block.quads && block.quads.left) || null; if (qL && qL.length===4) {
+          const qL = (block.quads && block.quads.left) || null;
+          if (qL && qL.length===4) {
             data[`auto_left_q1__${stateKey}`] = pointToLocal(qL[0]);
             data[`auto_left_q2__${stateKey}`] = pointToLocal(qL[1]);
             data[`auto_left_q3__${stateKey}`] = pointToLocal(qL[2]);
             data[`auto_left_q4__${stateKey}`] = pointToLocal(qL[3]);
           }
-          const qR = (block.quads && block.quads.right) || null; if (qR && qR.length===4) {
+          const qR = (block.quads && block.quads.right) || null;
+          if (qR && qR.length===4) {
             data[`auto_right_q1__${stateKey}`] = pointToLocal(qR[0]);
             data[`auto_right_q2__${stateKey}`] = pointToLocal(qR[1]);
             data[`auto_right_q3__${stateKey}`] = pointToLocal(qR[2]);
@@ -972,6 +890,7 @@ if (isUS) {
           }
         }
       }
+
       if (payload.meta && payload.meta.racetrack != null) racetrackToggle.checked = !!payload.meta.racetrack;
       if (payload.layout) variantSelect.value = payload.layout === 'US' ? 'US' : 'EU';
       if (payload.meta && payload.meta.calibration && payload.meta.calibration.grid_bbox) {
@@ -1000,13 +919,16 @@ if (isUS) {
     const regions = buildRegionsFromData(data, isUS);
     const automation_states = buildAutomationStatesFromData(data);
     const automation_legacy = buildAutomationLegacyFromStates(automation_states);
+
     return {
-      layout_detected: true, layout, table_variant,
+      layout_detected: true,
+      layout, table_variant,
       meta: {
-        tool: 'roulette-mapper-standalone', version: 5, timestamp: new Date().toISOString(),
-        orientation: currentOrientation, racetrack: racetrackToggle.checked,
-        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region'
-          ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null,
+        tool: 'roulette-mapper-standalone', version: 5,
+        timestamp: new Date().toISOString(),
+        orientation: currentOrientation,
+        racetrack: racetrackToggle.checked,
+        calibration: data['calib_grid_bbox'] && data['calib_grid_bbox'].type === 'region' ? { grid_bbox: pickRegion(data['calib_grid_bbox']) } : null,
         rebase: {
           enabled: rebaseByOrient[currentOrientation].enabled,
           base_width: rebaseByOrient[currentOrientation].baseW,
@@ -1016,61 +938,62 @@ if (isUS) {
         },
         image_size_mapped: getAnyImageSize()
       },
-      regions, automation_states, automation: automation_legacy, points: data
+      regions,
+      automation_states,
+      automation: automation_legacy,
+      points: data
     };
   }
+
   function getAnyImageSize(){
     const ds = datasets[currentOrientation];
-    for (const s of STATES) { const im = ds.imagesByState[s]; if (im) return [im.width, im.height]; }
+    for (const s of STATES) {
+      const im = ds.imagesByState[s]; if (im) return [im.width, im.height];
+    }
     return [0,0];
   }
+
   function buildRegionsFromData(points, isUS){
     const regions = {
       buttons: { Red:[], Black:[], Green:[], Even:[], Odd:[], Low:[], High:[], '1st12':[], '2nd12':[], '3rd12':[], col1:[], col2:[], col3:[], Double:[] },
-      numbers_grid: {}, splits_h: {}, splits_v: {}, corners: {}, streets: {}, sixlines: {},
-
-  special: {
-    first_four_0_1_2_3: [],
-    first_five_0_00_1_2_3: [],
-    zero_splits: { '0-1':[], '0-2':[], '0-3':[], '0-00':[], '00-2':[], '00-3':[] },
-    zero_trios: { '0-1-2':[], '0-2-3':[] }
-  },
-
-
+      numbers_grid: {},
+      splits_h: {}, splits_v: {}, corners: {},
+      streets: {}, sixlines: {},
+      special: { first_four_0_1_2_3: [], first_five_0_00_1_2_3: [], zero_splits: { '0-1':[], '0-2':[], '0-3':[], '0-00':[], '00-2':[], '00-3':[] } },
       racetrack: { bbox:[], voisins:[], tiers:[], orphelins:[], jeu_zero:[] },
       meta: { image_size: getAnyImageSize(), confidence: 0.0, notes:'', mapper_version:'5.x', generated_at: new Date().toISOString() }
     };
+
+    // Singles
     regions.numbers_grid['0'] = pickPoint(points['single_0']);
-
-
-    regions.special.zero_trios['0-1-2'] = pickPoint(points['trio_0_1_2']);
-    regions.special.zero_trios['0-2-3'] = pickPoint(points['trio_0_2_3']);
-
-
-
     if (isUS) regions.numbers_grid['00'] = pickPoint(points['single_00']);
     for (let n=1; n<=36; n++) regions.numbers_grid[String(n)] = pickPoint(points[`single_${n}`]);
 
-    // keep export of big buttons if you manually mapped them
-    regions.buttons.Red = pickPoint(points['color_red']);
+    // Buttons / groups
+    regions.buttons.Red   = pickPoint(points['color_red']);
     regions.buttons.Black = pickPoint(points['color_black']);
     regions.buttons.Green = pickPoint(points['color_green']);
+
     regions.buttons.Low   = pickPoint(points['even_low']);
     regions.buttons.Even  = pickPoint(points['even_even']);
     regions.buttons.Odd   = pickPoint(points['even_odd']);
     regions.buttons.High  = pickPoint(points['even_high']);
+
     regions.buttons['1st12'] = pickPoint(points['dozen_1']);
     regions.buttons['2nd12'] = pickPoint(points['dozen_2']);
     regions.buttons['3rd12'] = pickPoint(points['dozen_3']);
+
     regions.buttons.col1 = pickPoint(points['column_1']);
     regions.buttons.col2 = pickPoint(points['column_2']);
     regions.buttons.col3 = pickPoint(points['column_3']);
 
+    // Streets & Sixlines
     for (let i=0;i<12;i++) regions.streets[`street_${i+1}`] = pickPoint(points[`street_${i+1}`]);
     for (let i=0;i<11;i++) regions.sixlines[`sixline_${i+1}`] = pickPoint(points[`sixline_${i+1}`]);
 
-    regions.special.first_four_0_1_2_3   = pickPoint(points['first_four']);
-    regions.special.first_five_0_00_1_2_3= pickPoint(points['first_five']);
+    // Zero area
+    regions.special.first_four_0_1_2_3 = pickPoint(points['first_four']);
+    regions.special.first_five_0_00_1_2_3 = pickPoint(points['first_five']);
     regions.special.zero_splits['0-1']  = pickPoint(points['split_0_1']);
     regions.special.zero_splits['0-2']  = pickPoint(points['split_0_2']);
     regions.special.zero_splits['0-3']  = pickPoint(points['split_0_3']);
@@ -1078,32 +1001,45 @@ if (isUS) {
     regions.special.zero_splits['00-2'] = pickPoint(points['split_00_2']);
     regions.special.zero_splits['00-3'] = pickPoint(points['split_00_3']);
 
+    // Buttons bboxes
     regions.buttons.Double = pickRegion(points['btn_double']);
-    regions.meta.spin_box  = pickRegion(points['btn_spin']);
-    regions.meta.result_box= pickRegion(points['btn_result']);
+    regions.meta.spin_box   = pickRegion(points['btn_spin']);
+    regions.meta.result_box = pickRegion(points['btn_result']);
 
-    regions.racetrack.bbox = pickRegion(points['rt_bbox']);
-    regions.racetrack.voisins = pickPoint(points['rt_voisins']);
-    regions.racetrack.tiers   = pickPoint(points['rt_tiers']);
-    regions.racetrack.orphelins = pickPoint(points['rt_orphelins']);
-    regions.racetrack.jeu_zero  = pickPoint(points['rt_jeu_zero']);
+    // Racetrack
+    regions.racetrack.bbox       = pickRegion(points['rt_bbox']);
+    regions.racetrack.voisins    = pickPoint(points['rt_voisins']);
+    regions.racetrack.tiers      = pickPoint(points['rt_tiers']);
+    regions.racetrack.orphelins  = pickPoint(points['rt_orphelins']);
+    regions.racetrack.jeu_zero   = pickPoint(points['rt_jeu_zero']);
 
+    // FULL: splits & corners if present
     for (const [a,b] of horizSplits) regions.splits_h[`${a}-${b}`] = pickPoint(points[`split_h_${a}_${b}`]);
     for (const [a,b] of vertSplits)  regions.splits_v[`${a}-${b}`] = pickPoint(points[`split_v_${a}_${b}`]);
     for (const [p,q,r,t] of corners) regions.corners[`${p}-${q}-${r}-${t}`] = pickPoint(points[`corner_${p}_${q}_${r}_${t}`]);
 
     return regions;
   }
+
+  // ---------- Automation (per-state) ----------
   function getPoint(points, key){ const v = points[key]; if (!(v && v.type==='point')) return []; const t = applyRebase({ x:v.x, y:v.y }); return [t.x, t.y]; }
+  function getQuad(points, base){
+    const p1 = getPoint(points, `${base}_q1`), p2 = getPoint(points, `${base}_q2`), p3 = getPoint(points, `${base}_q3`), p4 = getPoint(points, `${base}_q4`);
+    if (p1.length && p2.length && p3.length && p4.length) return [p1,p2,p3,p4];
+    return [];
+  }
   function getQuadForState(points, base, state){
+    // Correct lookup: auto_center_q1__win (NOT auto_center__win_q1)
     const p1 = getPoint(points, `${base}_q1__${state}`);
     const p2 = getPoint(points, `${base}_q2__${state}`);
     const p3 = getPoint(points, `${base}_q3__${state}`);
     const p4 = getPoint(points, `${base}_q4__${state}`);
-    if (p1.length && p2.length && p3.length && p4.length) return [p1,p2,p3,p4]; return [];
+    if (p1.length && p2.length && p3.length && p4.length) return [p1,p2,p3,p4];
+    return [];
   }
   function pickRegionState(points, keyBase, state){
-    const v = points[`${keyBase}__${state}`]; if (!(v && v.type==='region')) return null;
+    const v = points[`${keyBase}__${state}`];
+    if (!(v && v.type==='region')) return null;
     const p1 = applyRebase({ x: v.x1, y: v.y1 }); const p2 = applyRebase({ x: v.x2, y: v.y2 });
     return { x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y };
   }
@@ -1111,36 +1047,67 @@ if (isUS) {
     const out = {};
     for (const s of STATES) {
       const white = pickRegionState(points,'auto_white_box',s);
-      const arc = pickRegionState(points,'auto_center_arc_box',s);
+      const arc   = pickRegionState(points,'auto_center_arc_box',s); // optional
       const quadC = getQuadForState(points,'auto_center',s);
       const quadL = getQuadForState(points,'auto_left',s);
       const quadR = getQuadForState(points,'auto_right',s);
       if (white || arc || (quadC && quadC.length)) {
-        out[s] = { white_box: white || null, center_arc_box: arc || null, quads: { center: quadC || [], left: quadL || [], right: quadR || [] } };
+        out[s] = {
+          white_box: white || null,
+          center_arc_box: arc || null,
+          quads: {
+            center: quadC || [],
+            left:   quadL || [],
+            right:  quadR || []
+          }
+        };
       }
     }
     return out;
   }
+
+  // Legacy union for older observers (uses union boxes, keeps quads if any)
   function buildAutomationLegacyFromStates(states){
     function unionBox(a,b){
-      if (!a && !b) return null; if (a && !b) return a; if (b && !a) return b;
+      if (!a && !b) return null;
+      if (a && !b) return a; if (b && !a) return b;
       return { x1: Math.min(a.x1,b.x1), y1: Math.min(a.y1,b.y1), x2: Math.max(a.x2,b.x2), y2: Math.max(a.y2,b.y2) };
     }
-    const lose = states['lose'] || {}; const win  = states['win']  || {};
+    const lose = states['lose'] || {};
+    const win  = states['win']  || {};
     const white = unionBox(lose.white_box, win.white_box);
-    const arc = unionBox(lose.center_arc_box, win.center_arc_box);
-    const quadC = (lose.quads?.center?.length===4) ? lose.quads.center : (win.quads?.center?.length===4) ? win.quads.center : [];
-    const quadL = (lose.quads?.left?.length===4) ? lose.quads.left : (win.quads?.left?.length===4) ? win.quads.left : [];
-    const quadR = (lose.quads?.right?.length===4) ? lose.quads.right : (win.quads?.right?.length===4) ? win.quads.right : [];
-    return { white_box: white, center_arc_box: arc, result_box: pickRegion(data['btn_result']) || null, quads: { center: quadC, left: quadL, right: quadR } };
+    const arc   = unionBox(lose.center_arc_box, win.center_arc_box);
+
+    const quadC = (lose.quads?.center?.length===4) ? lose.quads.center
+                 : (win.quads?.center?.length===4) ? win.quads.center : [];
+    const quadL = (lose.quads?.left?.length===4) ? lose.quads.left
+                 : (win.quads?.left?.length===4) ? win.quads.left : [];
+    const quadR = (lose.quads?.right?.length===4) ? lose.quads.right
+                 : (win.quads?.right?.length===4) ? win.quads.right : [];
+
+    return {
+      white_box: white,
+      center_arc_box: arc,
+      result_box: pickRegion(data['btn_result']) || null,
+      quads: { center: quadC, left: quadL, right: quadR }
+    };
   }
+
+  // ---------- Helpers ----------
   function pickPoint(v){ if (!(v && v.type==='point')) return []; const t = applyRebase({ x: v.x, y: v.y }); return [t.x, t.y]; }
   function pickRegion(v){ if (!(v && v.type==='region')) return null; const p1 = applyRebase({ x: v.x1, y: v.y1 }); const p2 = applyRebase({ x: v.x2, y: v.y2 }); return { x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y }; }
   function regionToLocal(r){ if (!r) return null; return { type:'region', x1:r.x1, y1:r.y1, x2:r.x2, y2:r.y2 }; }
   function pointToLocal(p){ if (!p || !Array.isArray(p) || p.length<2) return null; return { type:'point', x:p[0], y:p[1] }; }
+
   function downloadJSON(obj, filename) { const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }
   function escapeHtml(str) { return str.replace(/[&<>\'\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-  function initialBind() { bindOrientationAliases(); resizeCanvasToDisplaySize(); resetSteps(); fitView(); draw(); loadRebaseToUI(); }
+
+  // ---------- Init ----------
+  function initialBind() {
+    bindOrientationAliases();
+    resizeCanvasToDisplaySize(); resetSteps(); fitView(); draw();
+    loadRebaseToUI();
+  }
   initialBind();
 })();
 </script>
