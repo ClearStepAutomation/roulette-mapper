@@ -834,26 +834,35 @@
 
 
     // 3.5) Columns & Dozens (orientation-specific)
-    const DOZEN_OFFSET = 0.35; // closer to the grid
-    const dozenY = y2 + DOZEN_OFFSET * ch;
-    setPoint('dozen_1', x1 +  2 * cw, dozenY);
-    setPoint('dozen_2', x1 +  6 * cw, dozenY);
-    setPoint('dozen_3', x1 + 10 * cw, dozenY);
-
     if (currentOrientation === 'portrait') {
-      // Portrait skins: three 2:1 buttons in one row under the grid
-      const COL_BOTTOM_Y = y2 + 0.95 * ch; // just below grid
-      setPoint('column_1', x1 +  2 * cw, COL_BOTTOM_Y); // …34 (left)
-      setPoint('column_2', x1 +  6 * cw, COL_BOTTOM_Y); // …35 (middle)
-      setPoint('column_3', x1 + 10 * cw, COL_BOTTOM_Y); // …36 (right)
-    } else {
-      // Landscape: vertical stack to the right of the numbers grid
-      const colX = x2 + 0.5 * cw;
-      setPoint('column_1', colX, y1 + 2.5 * ch); // bottom → …34
-      setPoint('column_2', colX, y1 + 1.5 * ch); // middle → …35
-      setPoint('column_3', colX, y1 + 0.5 * ch); // top    → …36
-    }
+        // Dozens: stacked on the LEFT of the numbers grid
+        // panelX ~ center of the left side panel containing 1st12/2nd12/3rd12
+        const panelX = x1 - 0.75 * cw; // tweak to -0.85 * cw or -0.65 * cw if needed
 
+        // Place at 1/6, 3/6, 5/6 of the grid height
+        setPoint('dozen_1', panelX, y2 - gh * (1 / 6));
+        setPoint('dozen_2', panelX, y2 - gh * (3 / 6));
+        setPoint('dozen_3', panelX, y2 - gh * (5 / 6));
+
+        // Columns: three "2:1" buttons under the grid (left → right)
+        const colY = y2 + 0.95 * ch; // a bit below the grid
+        setPoint('column_1', x1 +  2 * cw, colY); // …34
+        setPoint('column_2', x1 +  6 * cw, colY); // …35
+        setPoint('column_3', x1 + 10 * cw, colY); // …36
+    } else {
+        // Landscape: dozens under the grid; columns stacked on the right
+        const DOZEN_OFFSET = 0.35;
+        const dozenY = y2 + DOZEN_OFFSET * ch;
+
+        setPoint('dozen_1', x1 +  2 * cw, dozenY);
+        setPoint('dozen_2', x1 +  6 * cw, dozenY);
+        setPoint('dozen_3', x1 + 10 * cw, dozenY);
+
+        const colX = x2 + 0.5 * cw;
+        setPoint('column_1', colX, y1 + 2.5 * ch); // bottom → …34
+        setPoint('column_2', colX, y1 + 1.5 * ch); // middle → …35
+        setPoint('column_3', colX, y1 + 0.5 * ch); // top    → …36
+    }
 
 
 
