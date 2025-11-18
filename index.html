@@ -1004,9 +1004,13 @@
     regions.buttons['1st12'] = pickPoint(points['dozen_1']);
     regions.buttons['2nd12'] = pickPoint(points['dozen_2']);
     regions.buttons['3rd12'] = pickPoint(points['dozen_3']);
-    regions.buttons.col1 = pickPoint(points['column_1']);
-    regions.buttons.col2 = pickPoint(points['column_2']);
-    regions.buttons.col3 = pickPoint(points['column_3']);
+
+
+    regions.buttons.col1 = pickPoint(points['column_3']); // bottom column (34,31,28,…)
+    regions.buttons.col2 = pickPoint(points['column_2']); // middle column (35,32,29,…)
+    regions.buttons.col3 = pickPoint(points['column_1']); // top column (36,33,30,…)
+
+
 
     // streets & sixlines
     for (let i=0;i<12;i++) regions.streets[`street_${i+1}`] = pickPoint(points[`street_${i+1}`]);
