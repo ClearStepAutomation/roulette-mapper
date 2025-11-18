@@ -441,9 +441,23 @@
 
     // Big buttons & ranges (manual)
 
-    s.push({ key:'column_1', label:'Column 1 (1,4,7,…34) — bottom "2 to 1"', type:'point' });
-    s.push({ key:'column_2', label:'Column 2 (2,5,8,…35) — middle "2 to 1"', type:'point' });
-    s.push({ key:'column_3', label:'Column 3 (3,6,9,…36) — top "2 to 1"', type:'point' });
+
+    // Orientation-aware guidance for the 2:1 column buttons
+    const colHints = (currentOrientation === 'portrait')
+      ? {
+          c1: 'Tap LEFT 2:1 under the grid (ends …34)',
+          c2: 'Tap MIDDLE 2:1 under the grid (ends …35)',
+          c3: 'Tap RIGHT 2:1 under the grid (ends …36)',
+        }
+      : {
+          c1: 'Tap BOTTOM 2:1 on the right (ends …34)',
+          c2: 'Tap MIDDLE 2:1 on the right (ends …35)',
+          c3: 'Tap TOP 2:1 on the right (ends …36)',
+        };
+
+    s.push({ key:'column_1', label:'Column 1 (1,4,7,…34)', type:'point', help: colHints.c1 });
+    s.push({ key:'column_2', label:'Column 2 (2,5,8,…35)', type:'point', help: colHints.c2 });
+    s.push({ key:'column_3', label:'Column 3 (3,6,9,…36)', type:'point', help: colHints.c3 });
 
 
 
@@ -818,29 +832,30 @@
       setPoint(`sixline_${i+1}`, cx, cy);
     }
 
-    // 3.5) Columns & Dozens (manual preferred; we provide suggested geometry)
 
-
-
-    const COL_OFFSET = 0.5;
-    const colX = x2 + COL_OFFSET * cw;
-    // bottom button → Column 1 (1,4,7,…34)
-    // middle button → Column 2 (2,5,8,…35)
-    // top button    → Column 3 (3,6,9,…36)
-    setPoint('column_1', colX, y1 + 2.5 * ch); // bottom
-    setPoint('column_2', colX, y1 + 1.5 * ch); // middle
-    setPoint('column_3', colX, y1 + 0.5 * ch); // top
-
-
-
-
-
-
-    const DOZEN_OFFSET = 0.35; // closer to grid as you wanted
+    // 3.5) Columns & Dozens (orientation-specific)
+    const DOZEN_OFFSET = 0.35; // closer to the grid
     const dozenY = y2 + DOZEN_OFFSET * ch;
     setPoint('dozen_1', x1 +  2 * cw, dozenY);
     setPoint('dozen_2', x1 +  6 * cw, dozenY);
     setPoint('dozen_3', x1 + 10 * cw, dozenY);
+
+    if (currentOrientation === 'portrait') {
+      // Portrait skins: three 2:1 buttons in one row under the grid
+      const COL_BOTTOM_Y = y2 + 0.95 * ch; // just below grid
+      setPoint('column_1', x1 +  2 * cw, COL_BOTTOM_Y); // …34 (left)
+      setPoint('column_2', x1 +  6 * cw, COL_BOTTOM_Y); // …35 (middle)
+      setPoint('column_3', x1 + 10 * cw, COL_BOTTOM_Y); // …36 (right)
+    } else {
+      // Landscape: vertical stack to the right of the numbers grid
+      const colX = x2 + 0.5 * cw;
+      setPoint('column_1', colX, y1 + 2.5 * ch); // bottom → …34
+      setPoint('column_2', colX, y1 + 1.5 * ch); // middle → …35
+      setPoint('column_3', colX, y1 + 0.5 * ch); // top    → …36
+    }
+
+
+
 
     // 4) Zero-area specials
     if (isUS) {
