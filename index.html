@@ -440,9 +440,15 @@
     for (let i=0;i<11;i++){ const L = [1+i*3,2+i*3,3+i*3,4+i*3,5+i*3,6+i*3]; s.push({ key:`sixline_${i+1}`, label:`Sixline ${i+1} (${L.join(',')})`, type:'point' }); }
 
     // Big buttons & ranges (manual)
-    s.push({ key:'column_1', label:'Column 1', type:'point' });
-    s.push({ key:'column_2', label:'Column 2', type:'point' });
-    s.push({ key:'column_3', label:'Column 3', type:'point' });
+
+    s.push({ key:'column_1', label:'Column 1 (1,4,7,…34) — bottom "2 to 1"', type:'point' });
+    s.push({ key:'column_2', label:'Column 2 (2,5,8,…35) — middle "2 to 1"', type:'point' });
+    s.push({ key:'column_3', label:'Column 3 (3,6,9,…36) — top "2 to 1"', type:'point' });
+
+
+
+
+
     s.push({ key:'dozen_1', label:'1st12', type:'point' });
     s.push({ key:'dozen_2', label:'2nd12', type:'point' });
     s.push({ key:'dozen_3', label:'3rd12', type:'point' });
@@ -813,11 +819,22 @@
     }
 
     // 3.5) Columns & Dozens (manual preferred; we provide suggested geometry)
+
+
+
     const COL_OFFSET = 0.5;
     const colX = x2 + COL_OFFSET * cw;
-    setPoint('column_1', colX, y1 + 0.5 * ch);
-    setPoint('column_2', colX, y1 + 1.5 * ch);
-    setPoint('column_3', colX, y1 + 2.5 * ch);
+    // bottom button → Column 1 (1,4,7,…34)
+    // middle button → Column 2 (2,5,8,…35)
+    // top button    → Column 3 (3,6,9,…36)
+    setPoint('column_1', colX, y1 + 2.5 * ch); // bottom
+    setPoint('column_2', colX, y1 + 1.5 * ch); // middle
+    setPoint('column_3', colX, y1 + 0.5 * ch); // top
+
+
+
+
+
 
     const DOZEN_OFFSET = 0.35; // closer to grid as you wanted
     const dozenY = y2 + DOZEN_OFFSET * ch;
@@ -1006,9 +1023,9 @@
     regions.buttons['3rd12'] = pickPoint(points['dozen_3']);
 
 
-    regions.buttons.col1 = pickPoint(points['column_3']); // bottom column (34,31,28,…)
+    regions.buttons.col1 = pickPoint(points['column_1']); // bottom column (34,31,28,…)
     regions.buttons.col2 = pickPoint(points['column_2']); // middle column (35,32,29,…)
-    regions.buttons.col3 = pickPoint(points['column_1']); // top column (36,33,30,…)
+    regions.buttons.col3 = pickPoint(points['column_3']); // top column (36,33,30,…)
 
 
 
